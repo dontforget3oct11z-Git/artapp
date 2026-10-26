@@ -1,6 +1,6 @@
 // Offline support: keep the app itself and its libraries; never cache AI or map requests.
-const VERSION = "artscan-v1";
-const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/ai.js", "js/store.js", "manifest.webmanifest",
+const VERSION = "artscan-v2";
+const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/ai.js", "js/common.js", "js/gemini.js", "js/claude.js", "js/store.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "vendor/anthropic-sdk.js", "vendor/exifr-lite.umd.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css"];
 const CDN = ["fonts.googleapis.com", "fonts.gstatic.com"];

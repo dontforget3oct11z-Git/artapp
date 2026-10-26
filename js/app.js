@@ -143,25 +143,25 @@ function status(msg, err, spin) {
   s.innerHTML = msg ? (spin ? '<span class="spinner"></span>' : "") + esc(msg) : "";
 }
 
-async function runIdentify(model) {
+async function runIdentify(precise) {
   const btn = $("#btnIdentify"); btn.disabled = true;
   $("#result").hidden = true;
-  status(model === ai.PRECISE_MODEL ? "高精度モードで調べ直しています…（20〜60秒ほど）" : "作品を調べています…（10〜40秒ほど）", false, true);
+  status(precise ? "高精度モード（Claude Opus）で調べ直しています…（20〜60秒ほど）" : "作品を調べています…（10〜40秒ほど）", false, true);
   const before = ai.usage().usd;
-  const used = model || ai.settings.model;
   try {
     const art = shots.art ? await toBlob(shots.art.img, 1568) : null;
     const label = shots.label ? await toBlob(shots.label.img, 1568, .88) : null;
     const museum = $("#inMuseum").value.trim();
-    const data = await ai.identify({ art, label, museum, place: geo?.place, model: used });
-    const cost = ai.usage().usd - before;
+    const args = { art, label, museum, place: geo?.place };
+    const res = precise ? await ai.identifyPrecise(args) : await ai.identify(args);
+    const cost = res.provider === "claude" ? ai.usage().usd - before : 0;
     status("");
-    showResult(normalize(data, museum), cost, used);
+    showResult(normalize(res.data, museum), cost, res, res.data?._note);
   } catch (e) {
     status(e.message || "識別できませんでした。手入力で保存できます。", true);
   } finally { updateIdentify(); }
 }
-$("#btnIdentify").onclick = () => runIdentify();
+$("#btnIdentify").onclick = () => runIdentify(false);
 $("#btnManual").onclick = () => showResult(normalize({}, $("#inMuseum").value.trim()));
 $("#btnGoSettings").onclick = () => openSettings();
 
@@ -195,16 +195,17 @@ function readForm(p, base) {
   return w;
 }
 
-function showResult(r, cost, usedModel) {
+function showResult(r, cost, used, note) {
   const box = $("#result"); box.hidden = false;
-  const canEscalate = usedModel && usedModel !== ai.PRECISE_MODEL;
+  const canEscalate = used && ai.canEscalate(used.provider, used.model);
   const unsure = r.confidence && r.confidence !== "high";
   box.innerHTML = `<div class="box">
     <div class="row" style="justify-content:space-between"><h3>${r.title ? esc(r.title) : "作品情報"}</h3>${confHtml(r.confidence)}</div>
     ${r.alternatives.length ? `<div class="small muted">他の候補：${r.alternatives.map(esc).join(" / ")}</div>` : ""}
-    ${cost != null ? `<div class="small muted mono">今回のAI利用料 約${yen(cost)}</div>` : ""}
+    ${used ? `<div class="small muted mono">${used.provider === "claude" ? `今回のAI利用料 約${yen(cost)}` : "今回のAI利用料 0円（Gemini無料枠）"}</div>` : ""}
+    ${note ? `<div class="small muted">${esc(note)}</div>` : ""}
     ${canEscalate ? `<div class="${unsure ? "status" : ""} row" style="justify-content:space-between">
-      <span class="small${unsure ? "" : " muted"}">${unsure ? "AIの自信が低めです。高精度モード（Opus）で調べ直せます。" : "結果が違うときは、高精度モード（Opus）で調べ直せます。"}<br><span class="muted">1回 約10円</span></span>
+      <span class="small${unsure ? "" : " muted"}">${unsure ? "AIの自信が低めです。高精度モード（Claude Opus）で調べ直せます。" : "結果が違うときは、高精度モード（Claude Opus）で調べ直せます。"}<br><span class="muted">有料：1回 約10円</span></span>
       <button class="btn ${unsure ? "primary" : "ghost"} small" id="btnPrecise">高精度で再識別</button></div>` : ""}
     ${formHtml(r, "new")}
     <div class="row"><button class="btn primary" id="btnSave">コレクションに保存</button><button class="btn ghost" id="btnDiscard">やり直す</button></div>
@@ -230,7 +231,7 @@ function showResult(r, cost, usedModel) {
     }
   };
   $("#btnDiscard").onclick = resetScan;
-  if ($("#btnPrecise")) $("#btnPrecise").onclick = () => runIdentify(ai.PRECISE_MODEL);
+  if ($("#btnPrecise")) $("#btnPrecise").onclick = () => runIdentify(true);
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function resetScan() {
@@ -460,31 +461,46 @@ $("#planName").onkeydown = e => { if (e.key === "Enter" && !e.isComposing) $("#b
 function settingsGet(k, d) { try { return localStorage.getItem("artscan." + k) ?? d; } catch { return d; } }
 function settingsSet(k, v) { try { localStorage.setItem("artscan." + k, v); } catch {} }
 
+function keyBox(p) {
+  const P = ai.PROVIDERS[p], key = ai.settings.keyFor(p);
+  const intro = p === "gemini"
+    ? `無料のキーを <a href="${P.keyUrl}" target="_blank" rel="noopener">Google AI Studio</a> で作れます（Googleアカウントでログインし「Create API key」）。無料枠では、送った写真と文章がGoogleのAI改善に使われることがあります。`
+    : `任意です。入れると、Claudeを選んだり、識別結果の画面から高精度モード（Claude Opus、1回約10円）を使えます。キーは <a href="${P.keyUrl}" target="_blank" rel="noopener">Anthropic Console</a> で作れます。使いすぎを防ぐため、Consoleの「Limits」で月の上限額を設定しておくと安心です。`;
+  return `<div class="box">
+      <h3>${p === "gemini" ? "Gemini APIキー（無料）" : "Claude APIキー（任意・有料）"}</h3>
+      <div class="field"><label for="sKey-${p}">APIキー（${P.keyHint}）</label>
+        <input id="sKey-${p}" type="password" autocomplete="off" spellcheck="false" value="${esc(key)}"></div>
+      <div class="row"><button class="btn primary" data-act="save" data-p="${p}">保存して確認</button><button class="btn ghost" data-act="show" data-p="${p}">表示</button>${key ? `<button class="btn ghost danger" data-act="del" data-p="${p}">削除</button>` : ""}</div>
+      <div class="small muted" id="sKeyMsg-${p}"></div>
+      <div class="help small muted">${intro}</div>
+    </div>`;
+}
+
 function openSettings() {
   const u = ai.usage();
   const s = ai.settings;
+  const prov = s.provider;
+  const models = ai.PROVIDERS[prov].impl.MODELS;
   openSheet(`<div class="bar"><button class="btn ghost" id="sClose">← 戻る</button></div>
     <h2>設定</h2>
     <div class="box">
-      <h3>Claude APIキー</h3>
-      <div class="field"><label for="sKey">APIキー（sk-ant-… で始まる文字列）</label>
-        <input id="sKey" type="password" autocomplete="off" spellcheck="false" value="${esc(s.apiKey)}" placeholder="sk-ant-api03-…"></div>
-      <div class="row"><button class="btn primary" id="sKeySave">保存して確認</button><button class="btn ghost" id="sKeyShow">表示</button>${s.apiKey ? `<button class="btn ghost danger" id="sKeyDel">削除</button>` : ""}</div>
-      <div class="small muted" id="sKeyMsg"></div>
-      <div class="help small muted">キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> で作れます。キーはこの端末のブラウザの中だけに保存され、AIへの問い合わせ以外には送られません。使いすぎを防ぐため、Consoleの「Limits」で月の上限額を設定しておくと安心です。</div>
-    </div>
-    <div class="box">
-      <h3>AIのモデル</h3>
-      <div class="field"><label for="sModel">識別・質問に使うモデル</label>
-        <select id="sModel">${Object.entries(ai.MODELS).map(([id, m]) => `<option value="${id}" ${id === s.model ? "selected" : ""}>${m.name}</option>`).join("")}</select>
-        <span class="help">1回のスキャンの目安：Haiku 約0.3円、Sonnet 約4〜5円、Opus 約8〜10円。Haikuでも、ラベルを一緒に撮れば作品名・作家は正確に読み取れます。結果に自信がないときは、識別結果の画面から高精度モード（Opus）で調べ直せます。</span></div>
-      <label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき5〜10円ほど増え、時間も少し長くなります。</span></span></label>
+      <h3>使うAI</h3>
+      <div class="field"><label for="sProvider">識別・質問・おすすめに使うAI</label>
+        <select id="sProvider">${Object.entries(ai.PROVIDERS).map(([id, P]) => `<option value="${id}" ${id === prov ? "selected" : ""}>${P.label}</option>`).join("")}</select></div>
+      <div class="field"><label for="sModel">モデル</label>
+        <select id="sModel">${Object.entries(models).map(([id, m]) => `<option value="${id}" ${id === s.modelFor(prov) ? "selected" : ""}>${m.name}</option>`).join("")}</select>
+        <span class="help">${prov === "gemini"
+          ? "Geminiは無料枠で使えます（1日の回数に上限あり）。上限に達したときは自動で軽量モデルに切り替えます。"
+          : "1回のスキャンの目安：Haiku 約0.3円、Sonnet 約4〜5円、Opus 約8〜10円。"}</span></div>
+      ${prov === "claude" ? `<label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき5〜10円ほど増え、時間も少し長くなります。</span></span></label>` : ""}
       <label class="check"><input type="checkbox" id="sGeo" ${settingsGet("geo", "1") === "1" ? "checked" : ""}><span>撮影した場所を記録する<br><span class="small muted">マップに表示するためです。写真に位置情報があればそれを使い、なければその場で撮った時だけ現在地を使います。</span></span></label>
     </div>
+    ${keyBox("gemini")}
+    ${keyBox("claude")}
     <div class="box">
-      <h3>今月のAI利用料（概算）</h3>
-      <div class="cost"><div><span class="small muted">金額</span><b>${yen(u.usd)}</b></div><div><span class="small muted">スキャン</span><b>${u.scans}回</b></div><div><span class="small muted">AI呼び出し</span><b>${u.calls}回</b></div></div>
-      <div class="small muted">この端末での利用分を1ドル${ai.USD_JPY}円で計算した目安です。正確な金額はAnthropic Consoleで確認できます。</div>
+      <h3>今月のAI利用</h3>
+      <div class="cost"><div><span class="small muted">有料分（Claude）</span><b>${yen(u.usd)}</b></div><div><span class="small muted">無料（Gemini）</span><b>${u.freeCalls}回</b></div><div><span class="small muted">スキャン</span><b>${u.scans}回</b></div></div>
+      <div class="small muted">この端末での利用分です。Claudeの金額は1ドル${ai.USD_JPY}円で計算した目安で、正確な金額はAnthropic Consoleで確認できます。</div>
     </div>
     <div class="box">
       <h3>バックアップ</h3>
@@ -495,20 +511,22 @@ function openSettings() {
     </div>
     <div class="box">
       <h3>このアプリについて</h3>
-      <div class="small muted">ArtScan（ArtScan AI LLC）の機能を参考に作った個人用アプリです。地図データ © OpenStreetMap contributors。</div>
+      <div class="small muted">ArtScan（ArtScan AI LLC）の機能を参考に作った個人用アプリです。APIキーはこの端末のブラウザの中だけに保存され、AIへの問い合わせ以外には送られません。地図データ © OpenStreetMap contributors。</div>
     </div>`);
   $("#sClose").onclick = () => closeSheet();
-  $("#sKeyShow").onclick = () => { const i = $("#sKey"); i.type = i.type === "password" ? "text" : "password"; };
-  $("#sKeySave").onclick = async () => {
-    const k = $("#sKey").value.trim(); const msg = $("#sKeyMsg");
+  $("#sheetIn").querySelectorAll("button[data-act]").forEach(b => b.onclick = async () => {
+    const p = b.dataset.p, input = $("#sKey-" + p), msg = $("#sKeyMsg-" + p);
+    if (b.dataset.act === "show") { input.type = input.type === "password" ? "text" : "password"; return; }
+    if (b.dataset.act === "del") { ai.settings.setKey(p, ""); updateIdentify(); openSettings(); toast("APIキーを削除しました"); return; }
+    const k = input.value.trim();
     if (!k) { msg.textContent = "キーを入力してください。"; return; }
     msg.innerHTML = '<span class="spinner"></span>確認しています…';
-    try { await ai.testKey(k); ai.settings.apiKey = k; msg.textContent = "保存しました。このキーで使えます。"; updateIdentify(); }
+    try { await ai.testKey(p, k); ai.settings.setKey(p, k); msg.textContent = "保存しました。このキーで使えます。"; updateIdentify(); }
     catch (e) { msg.textContent = e.message + (e.code === "network" ? "" : "（キーは保存していません）"); }
-  };
-  if ($("#sKeyDel")) $("#sKeyDel").onclick = () => { ai.settings.apiKey = ""; updateIdentify(); openSettings(); toast("APIキーを削除しました"); };
-  $("#sModel").onchange = e => { ai.settings.model = e.target.value; toast("モデルを変更しました"); };
-  $("#sWeb").onchange = e => { ai.settings.webSearch = e.target.checked; };
+  });
+  $("#sProvider").onchange = e => { ai.settings.provider = e.target.value; updateIdentify(); openSettings(); toast("使うAIを変更しました"); };
+  $("#sModel").onchange = e => { ai.settings.setModel(prov, e.target.value); toast("モデルを変更しました"); };
+  if ($("#sWeb")) $("#sWeb").onchange = e => { ai.settings.webSearch = e.target.checked; };
   $("#sGeo").onchange = e => { settingsSet("geo", e.target.checked ? "1" : "0"); };
   $("#sExport").onclick = async () => {
     try {

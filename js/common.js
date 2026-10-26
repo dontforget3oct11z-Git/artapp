@@ -1,0 +1,131 @@
+// Shared pieces for every AI provider: settings storage, usage counter, errors, prompts and schemas.
+
+export const USD_JPY = 150; // rough rate for the cost display
+
+export const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+export const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+
+export class AiError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+
+// ---- usage (per calendar month, this device only) ----
+function monthKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+export function usage() {
+  let u; try { u = JSON.parse(lsGet("artscan.usage") || "{}"); } catch { u = {}; }
+  if (u.month !== monthKey()) u = { month: monthKey(), usd: 0, calls: 0, scans: 0, freeCalls: 0 };
+  u.freeCalls ||= 0;
+  return u;
+}
+export function addUsage({ usd = 0, kind = "", free = false }) {
+  const u = usage();
+  u.usd += usd; u.calls += 1; if (kind === "scan") u.scans += 1; if (free) u.freeCalls += 1;
+  lsSet("artscan.usage", JSON.stringify(u));
+}
+
+// Pull the last JSON object out of a free-text answer.
+export function extractJson(text) {
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const src = fence ? fence[1] : text;
+  const start = src.indexOf("{");
+  const end = src.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new AiError("json", "AIの答えを読み取れませんでした。もう一度試してください。");
+  try { return JSON.parse(src.slice(start, end + 1)); }
+  catch { throw new AiError("json", "AIの答えを読み取れませんでした。もう一度試してください。"); }
+}
+export function parseJson(text) {
+  try { return JSON.parse(text); } catch { return extractJson(text); }
+}
+
+export async function toBase64(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// ---------------- identify ----------------
+export const WORK_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "originalTitle", "artist", "artistReading", "year", "medium", "dimensions", "movement", "museum",
+    "description", "artistNote", "lookFor", "labelText", "confidence", "alternatives", "tags"],
+  properties: {
+    title: { type: "string" },
+    originalTitle: { type: "string" },
+    artist: { type: "string" },
+    artistReading: { type: "string" },
+    year: { type: "string" },
+    medium: { type: "string" },
+    dimensions: { type: "string" },
+    movement: { type: "string" },
+    museum: { type: "string" },
+    description: { type: "string" },
+    artistNote: { type: "string" },
+    lookFor: { type: "array", items: { type: "string" } },
+    labelText: { type: "string" },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    alternatives: { type: "array", items: { type: "string" } },
+    tags: { type: "array", items: { type: "string" } },
+  },
+};
+
+export const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員です。来館者が撮った写真から作品を特定し、日本語で作品カードを作ります。
+
+各項目の書き方：
+- title: 日本語の定訳があれば日本語の作品名。原題は originalTitle に（同じなら空文字）。
+- artist: 作家名の日本語表記。artistReading: 原語表記（例：Claude Monet）。日本人作家なら読み仮名。
+- year / medium / dimensions / movement: わかる範囲で。不明なら空文字。
+- museum: 所蔵館。ラベルや撮影場所の情報を優先。
+- description: 実物の前で読んで楽しい見どころを3〜5文。
+- artistNote: 作家について1〜2文。
+- lookFor: 実物で注目してほしい細部を2〜3個、各1文。
+- labelText: ラベル写真があれば、その文字を原文のまま改行も保って書き起こす。なければ空文字。
+- confidence: 特定の確からしさ。ラベルで確認できたら high、絵柄だけで有名作と一致すれば high か medium、推測なら low。
+- alternatives: confidence が high でない時の他の候補「作品名 / 作家」を最大3件。high なら空配列。
+- tags: 主題・モチーフ・色などの短いタグを3〜6個。
+
+写真から確認できない情報を事実のように断定しないでください。特定できない作品（現代作家の作品や個人蔵など）でも、見える情報から推定して埋め、confidence を low にしてください。`;
+
+export function identifyText({ hasArt, hasLabel, museum, place }) {
+  const what = hasArt && hasLabel ? "1枚目は作品、2枚目はその作品の解説ラベル（キャプション）の写真です。"
+    : hasArt ? "作品の写真です。" : "作品の解説ラベル（キャプション）の写真です。";
+  let ctx = "";
+  if (museum) ctx += `撮影した場所：${museum}\n`;
+  else if (place) ctx += `撮影した場所の近く：${place}\n`;
+  return `${what}\n${ctx}この作品の作品カードを作ってください。`;
+}
+
+// ---------------- ask ----------------
+export function askSystem(work) {
+  const ctx = [
+    `作品：${work.title}${work.originalTitle ? `（${work.originalTitle}）` : ""}`,
+    `作家：${work.artist}${work.artistReading ? `（${work.artistReading}）` : ""}`,
+    work.year && `制作年：${work.year}`, work.medium && `技法：${work.medium}`,
+    work.movement && `様式：${work.movement}`, work.museum && `所蔵・展示：${work.museum}`,
+    work.description && `解説：${work.description}`,
+    work.labelText && `ラベルの文字：\n${work.labelText}`,
+    work.note && `鑑賞者のメモ：${work.note}`,
+  ].filter(Boolean).join("\n");
+  return `あなたは親切で知識豊富な美術館のガイドです。次の作品を前にした来館者の質問に、日本語で答えてください。普段は3〜6文で簡潔に。確かでないことは推測だと明示してください。Markdownの見出しや表は使わず、普通の文章で答えてください。\n\n${ctx}`;
+}
+
+// ---------------- discover ----------------
+export const PICKS_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["taste", "picks"],
+  properties: {
+    taste: { type: "string" },
+    picks: { type: "array", items: {
+      type: "object", additionalProperties: false, required: ["title", "artist", "year", "where", "why"],
+      properties: { title: { type: "string" }, artist: { type: "string" }, year: { type: "string" }, where: { type: "string" }, why: { type: "string" } },
+    } },
+  },
+};
+
+export function recommendPrompt(works) {
+  const list = works.slice(0, 60).map(w => `- ${w.artist}「${w.title}」${w.year ? `（${w.year}）` : ""}${w.movement ? ` ${w.movement}` : ""}${w.fav ? " ♥" : ""}`).join("\n");
+  return `ある人が美術館で撮影して保存した作品の一覧です（♥はお気に入り）。\n${list}\n\nこの人の好みを日本語で2文で分析し（taste）、一覧にない実在の作品を6点すすめてください（picks）。日本国内の美術館で見られる作品を3点以上含め、where には所蔵館と都市を書いてください。why はこの人の好みと結びつけた1文にしてください。`;
+}
+export function previewPrompt(place) {
+  return `これから「${place}」に行きます。そこで見逃せない作品を最大6点、日本語で教えてください。taste には、その美術館・展覧会の特徴と回り方のコツを2文で。picks の where には館内の展示場所や時期の注意（常設か、展示替えがあるか等）を、わかる範囲で書いてください。確かでないことは「〜の可能性があります」と書いてください。`;
+}
