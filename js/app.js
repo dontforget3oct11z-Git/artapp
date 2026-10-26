@@ -469,8 +469,8 @@ function openSettings() {
       <h3>AIのモデル</h3>
       <div class="field"><label for="sModel">識別・質問に使うモデル</label>
         <select id="sModel">${Object.entries(ai.MODELS).map(([id, m]) => `<option value="${id}" ${id === s.model ? "selected" : ""}>${m.name}</option>`).join("")}</select>
-        <span class="help">1回のスキャンの目安：Opus 約4〜8円、Sonnet 約2〜4円、Haiku 1円未満。精度はOpusが最も高いです。</span></div>
-      <label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき数円ほど増え、時間も少し長くなります。</span></span></label>
+        <span class="help">1回のスキャンの目安：Opus 約8〜10円、Sonnet 約4〜5円、Haiku 約0.3円。精度はOpusが最も高いです。</span></div>
+      <label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき5〜10円ほど増え、時間も少し長くなります。</span></span></label>
       <label class="check"><input type="checkbox" id="sGeo" ${settingsGet("geo", "1") === "1" ? "checked" : ""}><span>撮影した場所を記録する<br><span class="small muted">マップに表示するためです。写真に位置情報があればそれを使い、なければその場で撮った時だけ現在地を使います。</span></span></label>
     </div>
     <div class="box">
