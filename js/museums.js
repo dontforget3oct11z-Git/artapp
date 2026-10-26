@@ -3,7 +3,8 @@
 import * as P from "./places.js";
 import { $, esc, toast, openSheet, closeSheet, app, jpDate, today } from "./ui.js";
 
-let filter = "all", mode = "map";
+let filter = "all", mode = "map", scope = "jp", q = "";
+try { scope = localStorage.getItem("artscan.mScope") || "jp"; } catch {}
 let map = null, layer = null;
 const ST = { went: "行った", want: "行きたい", "": "まだ" };
 
@@ -11,20 +12,25 @@ const color = name => getComputedStyle(document.documentElement).getPropertyValu
 
 export function render() {
   const works = app.works();
-  const all = P.museums(works);
+  const everything = P.museums(works);
+  const all = everything.filter(m => scope === "jp" ? P.isJapan(m) : !P.isJapan(m));
   const went = all.filter(m => m.went).length, want = all.filter(m => m.want).length;
   $("#mTally").innerHTML = `
     <div><b>${went}</b><span>行った</span></div>
     <div><b>${want}</b><span>行きたい</span></div>
     <div><b>${all.length - went - want}</b><span>まだ</span></div>
     <div class="bar" aria-label="行った美術館の割合"><i style="width:${all.length ? Math.round(went / all.length * 100) : 0}%"></i></div>`;
+  $("#mScope").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s === scope)));
   $("#mFilter").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === filter)));
   $("#mSeg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === mode)));
-  const shown = all.filter(m => filter === "all" || m.status === filter);
+  const nq = q.normalize("NFKC").toLowerCase();
+  const shown = all.filter(m => (filter === "all" || m.status === filter) &&
+    (!nq || [m.name, m.en, m.pref, m.city, m.country].join(" ").normalize("NFKC").toLowerCase().includes(nq)));
+  $("#mSearchWrap").hidden = mode === "log";
   $("#map").hidden = mode !== "map"; $("#mapNote").hidden = mode !== "map";
   $("#mList").hidden = mode !== "list";
   $("#timelineWrap").hidden = mode !== "log";
-  if (mode === "map") renderMap(shown, works, all);
+  if (mode === "map") renderMap(shown, works, everything);
   if (mode === "list") renderList(shown);
   if (mode === "log") renderTimeline(works);
 }
@@ -32,7 +38,7 @@ export function render() {
 function renderMap(shown, works, all) {
   if (!window.L) { $("#mapNote").textContent = "地図を読み込めませんでした。インターネット接続を確認してください。"; return; }
   if (!map) {
-    map = L.map("map", { zoomControl: true, attributionControl: true }).setView([35.68, 139.76], 5);
+    map = L.map("map", { zoomControl: true, attributionControl: true, preferCanvas: true, worldCopyJump: true }).setView([35.68, 139.76], 5);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
@@ -45,16 +51,16 @@ function renderMap(shown, works, all) {
   const pts = [];
   for (const m of shown) {
     if (!Number.isFinite(m.lat) || !Number.isFinite(m.lng)) continue;
-    pts.push([m.lat, m.lng]);
-    const style = m.went ? { radius: 9 + Math.min(8, m.works.length), color: accent, weight: 2, fillColor: accent, fillOpacity: .75 }
-      : m.want ? { radius: 9, color: warn, weight: 3, fillColor: paper, fillOpacity: .9 }
-      : { radius: 6, color: muted, weight: 1.5, fillColor: paper, fillOpacity: .8 };
+    if (m.went || m.want || filter === "" || q) pts.push([m.lat, m.lng]);
+    const style = m.went ? { radius: 8 + Math.min(8, m.works.length), color: paper, weight: 2, fillColor: accent, fillOpacity: .95 }
+      : m.want ? { radius: 8, color: warn, weight: 3, fillColor: paper, fillOpacity: 1 }
+      : { radius: 4.5, color: muted, weight: 1, fillColor: paper, fillOpacity: .9, opacity: .7 };
     L.circleMarker([m.lat, m.lng], style).bindPopup(() => popupHtml(m), { maxWidth: 260 }).addTo(layer);
   }
   // photos taken somewhere that isn't in the museum list
   const known = new Set(all.flatMap(m => m.works.map(w => w.id)));
   const loose = works.filter(w => !known.has(w.id) && Number.isFinite(w.lat) && Number.isFinite(w.lng));
-  if (filter === "all" || filter === "went") {
+  if ((filter === "all" || filter === "went") && scope === "jp" && !q) {
     const groups = new Map();
     for (const w of loose) { const k = w.museum || `${w.lat.toFixed(3)},${w.lng.toFixed(3)}`; (groups.get(k) || groups.set(k, []).get(k)).push(w); }
     for (const ws of groups.values()) {
@@ -66,8 +72,10 @@ function renderMap(shown, works, all) {
           <button class="btn small" data-addfrom="${esc(ws[0].id)}">美術館として登録</button>`).addTo(layer);
     }
   }
-  if (pts.length === 1) map.setView(pts[0], 14);
-  else if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+  // Zoom to the museums you marked; otherwise show the whole country or the world.
+  if (pts.length === 1) map.setView(pts[0], 13);
+  else if (pts.length > 1 && pts.length < 300) map.fitBounds(pts, { padding: [24, 24], maxZoom: 13 });
+  else map.setView(scope === "jp" ? [36.5, 137.5] : [30, 10], scope === "jp" ? 5 : 2);
   $("#mapNote").innerHTML = `<span class="key went"></span>行った <span class="key want"></span>行きたい <span class="key none"></span>まだ ・ 印を押すと記録を付けられます`;
 }
 
@@ -77,7 +85,7 @@ function statusButtons(m) {
 }
 function popupHtml(m) {
   return `<div class="pop-title">${esc(m.name)}</div>
-    <div class="small muted">${esc(m.pref || "")}${esc(m.city || "")}${m.works.length ? ` ・ 作品${m.works.length}点` : ""}${m.visits[0] ? ` ・ 最後に行った日 ${esc(m.visits[0].replace(/-/g, "."))}` : ""}</div>
+    <div class="small muted">${esc(P.isJapan(m) ? (m.pref || "") + (m.city || "") : [m.country, m.city].filter(Boolean).join(" "))}${m.works.length ? ` ・ 作品${m.works.length}点` : ""}${m.visits[0] ? ` ・ 最後に行った日 ${esc(m.visits[0].replace(/-/g, "."))}` : ""}</div>
     ${statusButtons(m)}
     ${m.works.length ? `<div class="pop-strip">${m.works.slice(0, 8).map(w => `<button data-id="${esc(w.id)}" aria-label="${esc(w.title)}"><img src="${app.thumbOf(w)}" alt=""></button>`).join("")}</div>` : ""}
     <div class="row" style="margin-top:6px">${m.current ? `<button class="btn small" data-exfor="${esc(m.id)}">開催中の展示 ${m.current}件</button>` : ""}<button class="btn small ghost" data-mopen="${esc(m.id)}">詳しく</button></div>`;
@@ -103,17 +111,19 @@ async function handleCommon(e) {
 
 function renderList(shown) {
   const byPref = new Map();
-  for (const m of shown) { const k = m.pref || "その他"; (byPref.get(k) || byPref.set(k, []).get(k)).push(m); }
+  const jp = scope === "jp";
+  for (const m of shown) { const k = (jp ? m.pref : m.country) || "その他"; (byPref.get(k) || byPref.set(k, []).get(k)).push(m); }
   const order = [...P.PREFS, "その他"];
-  const keys = [...byPref.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const keys = [...byPref.keys()].sort(jp ? (a, b) => order.indexOf(a) - order.indexOf(b) : (a, b) => (a === "その他") - (b === "その他") || byPref.get(b).length - byPref.get(a).length || a.localeCompare(b, "ja"));
+  const openAll = shown.length <= 40 || !!q;
   $("#mList").innerHTML = keys.map(k => {
-    const ms = byPref.get(k).sort((a, b) => (b.went - a.went) || (b.want - a.want) || a.name.localeCompare(b.name, "ja"));
+    const ms = byPref.get(k).sort((a, b) => (b.went - a.went) || (b.want - a.want) || (b.rank || 0) - (a.rank || 0) || a.name.localeCompare(b.name, "ja"));
     const went = ms.filter(m => m.went).length;
-    return `<div class="box pref"><div class="hd"><h3>${esc(k)}</h3><span class="small muted mono">${went} / ${ms.length}館</span></div>
+    return `<details class="pref" ${openAll || went || ms.some(m => m.want) ? "open" : ""}><summary><h3>${esc(k)}</h3><span class="small muted mono">${went} / ${ms.length}館</span></summary>
       ${ms.map(m => `<div class="mrow">
-        <button class="mname" data-mopen="${esc(m.id)}"><span class="dot ${m.status || "none"}"></span><span><b>${esc(m.name)}</b><span class="small muted">${esc(m.city || "")}${m.works.length ? ` ・ 作品${m.works.length}点` : ""}${m.current ? ` ・ 開催中${m.current}件` : ""}</span></span></button>
+        <button class="mname" data-mopen="${esc(m.id)}"><span class="dot ${m.status || "none"}"></span><span><b>${esc(m.name)}</b><span class="small muted">${esc(m.city || "")}${m.en && !jp ? ` ・ ${esc(m.en)}` : ""}${m.works.length ? ` ・ 作品${m.works.length}点` : ""}${m.current ? ` ・ 開催中${m.current}件` : ""}</span></span></button>
         ${statusButtons(m)}</div>`).join("")}
-    </div>`;
+    </details>`;
   }).join("") || `<div class="empty">この条件の美術館はありません。</div>`;
 }
 
@@ -137,7 +147,7 @@ export function openMuseum(id) {
   const exs = P.exhibitionsAt(id).filter(e => !e.end || e.end >= today()).sort((a, b) => (a.start || "").localeCompare(b.start || ""));
   openSheet(`<div class="bar" id="museumSheet"><button class="btn ghost" id="msClose">← 戻る</button>${m.url ? `<a class="btn ghost small" href="${esc(m.url)}" target="_blank" rel="noopener">公式サイト</a>` : ""}</div>
     <h2>${esc(m.name)}</h2>
-    <div class="small muted">${esc(m.pref || "")}${esc(m.city || "")}</div>
+    <div class="small muted">${esc(P.isJapan(m) ? (m.pref || "") + (m.city || "") : [m.country, m.city].filter(Boolean).join(" "))}${m.en ? ` ・ ${esc(m.en)}` : ""}</div>
     ${statusButtons(m)}
     <div class="box"><h3>行った日</h3>
       ${m.visits.length ? `<div class="chips" style="flex-wrap:wrap">${m.visits.map(d => `<span class="chip">${esc(d.replace(/-/g, "."))}</span>`).join("")}</div>` : `<div class="small muted">まだ記録がありません。</div>`}
@@ -183,16 +193,17 @@ export function openAdd(pre = {}) {
     $("#maOut").innerHTML = '<div class="status small"><span class="spinner"></span>探しています…</div>';
     try {
       const near = Number.isFinite(pre.lat) ? `&viewbox=${pre.lng - .05},${pre.lat + .05},${pre.lng + .05},${pre.lat - .05}` : "";
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&countrycodes=jp&accept-language=ja&addressdetails=1&limit=8${near}`);
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}${scope === "jp" ? "&countrycodes=jp" : ""}&accept-language=ja&addressdetails=1&limit=8${near}`);
       const j = r.ok ? await r.json() : [];
       $("#maOut").innerHTML = j.length ? j.map((x, i) => {
         const a = x.address || {};
-        return `<div class="rec row" style="justify-content:space-between"><div><b>${esc(x.name || q)}</b><div class="small muted">${esc([a.province || a.state, a.city || a.town || a.village, a.suburb].filter(Boolean).join(" "))}</div></div><button class="btn small" data-i="${i}">追加</button></div>`;
+        return `<div class="rec row" style="justify-content:space-between"><div><b>${esc(x.name || q)}</b><div class="small muted">${esc([a.country_code !== "jp" ? a.country : "", a.province || a.state, a.city || a.town || a.village, a.suburb].filter(Boolean).join(" "))}</div></div><button class="btn small" data-i="${i}">追加</button></div>`;
       }).join("") : `<div class="status small">見つかりませんでした。下の「この名前で追加」を使ってください。</div>`;
       $("#maOut").onclick = e => {
         const b = e.target.closest("[data-i]"); if (!b) return;
         const x = j[+b.dataset.i], a = x.address || {};
-        add({ name: x.name || q, pref: a.province || a.state || "", city: a.city || a.town || a.village || "", lat: +x.lat, lng: +x.lon });
+        const cc = (a.country_code || "jp").toUpperCase();
+        add({ name: x.name || q, pref: cc === "JP" ? (a.province || a.state || "") : "", city: a.city || a.town || a.village || "", lat: +x.lat, lng: +x.lon, cc, country: cc === "JP" ? "日本" : (a.country || "") });
       };
     } catch { $("#maOut").innerHTML = `<div class="status err small">探せませんでした。インターネット接続を確認してください。</div>`; }
   };
@@ -206,6 +217,8 @@ export function openAdd(pre = {}) {
 }
 
 export function init() {
+  $("#mScope").onclick = e => { const b = e.target.closest("button"); if (!b) return; scope = b.dataset.s; try { localStorage.setItem("artscan.mScope", scope); } catch {} render(); };
+  let qt; $("#mSearch").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); render(); }, 200); };
   $("#mFilter").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; filter = b.dataset.f; render(); };
   $("#mSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; mode = b.dataset.m; render(); };
   $("#mList").onclick = e => handleCommon(e);

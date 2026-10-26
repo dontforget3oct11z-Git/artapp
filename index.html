@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ArtMuse</title>
 <meta name="description" content="美術館で撮った作品を、AIで作品名と解説つきのコレクションに。">
-<meta name="theme-color" content="#eef0ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141716" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f3ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -22,10 +22,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <div>
-      <div class="brand">Art<span>Muse</span></div>
-      <div class="sub">美術館で撮った作品を、名前と解説つきで残す</div>
-    </div>
+    <div class="brand">Art<span>Muse</span></div>
     <div class="top-right">
       <span class="sync-dot" id="syncDot" hidden></span>
       <span class="small muted mono" id="count"></span>
@@ -37,6 +34,7 @@
 
   <!-- コレクション -->
   <section class="view" id="v-collection">
+    <div class="vh"><div><div class="eyebrow">Collection</div><h2>コレクション</h2></div></div>
     <div class="toolbar">
       <input class="search" id="q" type="search" placeholder="作品名・作家・美術館・メモで検索" aria-label="検索">
       <select class="select" id="sort" aria-label="並び順">
@@ -59,7 +57,8 @@
 
   <!-- 美術館 -->
   <section class="view" id="v-museums" hidden>
-    <div class="row" style="justify-content:space-between"><h2>美術館</h2><button class="btn small" id="mAdd">＋ 美術館を追加</button></div>
+    <div class="vh"><div><div class="eyebrow">Museums</div><h2>美術館</h2></div><button class="btn small" id="mAdd">＋ 追加</button></div>
+    <div class="seg wide" id="mScope" role="group" aria-label="地域"><button data-s="jp" aria-pressed="true">国内</button><button data-s="world" aria-pressed="false">海外</button></div>
     <div class="tally" id="mTally"></div>
     <div class="row" style="justify-content:space-between">
       <div class="chips" id="mFilter" aria-label="絞り込み">
@@ -72,6 +71,7 @@
         <button data-m="map" aria-pressed="true">地図</button><button data-m="list" aria-pressed="false">一覧</button><button data-m="log" aria-pressed="false">記録</button>
       </div>
     </div>
+    <div id="mSearchWrap"><input class="search" id="mSearch" type="search" placeholder="美術館の名前・地域・国で探す" aria-label="美術館を探す"></div>
     <div id="map" class="map" role="region" aria-label="美術館の地図"></div>
     <p class="small muted" id="mapNote" style="margin:0"></p>
     <div id="mList" class="mlist" hidden></div>
@@ -80,7 +80,7 @@
 
   <!-- スキャン -->
   <section class="view" id="v-scan" hidden>
-    <h2>作品をスキャン</h2>
+    <div class="vh"><div><div class="eyebrow">Scan</div><h2>作品をスキャン</h2></div></div>
     <div id="keyNotice" class="empty" hidden>
       <strong>最初にAPIキーを設定してください</strong>
       <span class="small muted">AI識別には、Googleの無料のGemini APIキーを使います（Claudeのキーも使えます）。キーはこの端末の中だけに保存されます。</span>
@@ -120,7 +120,7 @@
 
   <!-- 展示（カレンダー） -->
   <section class="view" id="v-calendar" hidden>
-    <div class="row" style="justify-content:space-between"><h2>展示カレンダー</h2><button class="btn small" id="calAdd">＋ 展示を追加</button></div>
+    <div class="vh"><div><div class="eyebrow">Exhibitions</div><h2>展示カレンダー</h2></div><button class="btn small" id="calAdd">＋ 追加</button></div>
     <div class="row" style="justify-content:space-between">
       <div class="chips" id="calFilter" aria-label="表示する展示">
         <button class="chip" data-f="mine" aria-pressed="true">行った・行きたい美術館</button>
@@ -141,7 +141,7 @@
 
   <!-- 発見 -->
   <section class="view" id="v-discover" hidden>
-    <h2>発見</h2>
+    <div class="vh"><div><div class="eyebrow">Discover</div><h2>発見</h2></div></div>
     <div class="box">
       <h3>あなたへのおすすめ</h3>
       <p class="small muted" style="margin:0">コレクションの傾向から好みを読み取り、次に見てほしい作品を選びます。</p>

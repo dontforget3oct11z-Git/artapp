@@ -3,20 +3,22 @@
 import * as store from "./store.js";
 import { getJson, dist, today } from "./ui.js";
 
-let catalog = [];          // data/museums.json
+let catalog = [];          // data/museums.json (with exhibition pages) + data/museums-wikidata.json (Japan + world)
 let feed = [];             // data/exhibitions.json
 export let feedUpdated = null;
 export let feedErrors = [];
 let museumRecs = new Map(), marks = new Map(), events = [];
 
 export async function loadCatalog() {
-  const [m, e] = await Promise.all([getJson("data/museums.json"), getJson("data/exhibitions.json")]);
-  if (m?.museums) catalog = m.museums;
+  const [m, w, e] = await Promise.all([getJson("data/museums.json"), getJson("data/museums-wikidata.json"), getJson("data/exhibitions.json")]);
+  if (m?.museums) catalog = [...m.museums.map(x => ({ ...x, cc: "JP", country: "日本", rank: 1000 })), ...(w?.museums || [])];
+  baseCache = null;
   if (e) { feed = e.exhibitions || []; feedUpdated = e.updatedAt || null; feedErrors = e.errors || []; }
 }
 export async function loadLocal() {
   const [a, b, c] = await Promise.all([store.list("museums"), store.list("marks"), store.list("events")]);
   museumRecs = new Map(a.map(r => [r.id, r]));
+  baseCache = null;
   marks = new Map(b.map(r => [r.id, r]));
   events = c;
 }
@@ -28,21 +30,23 @@ export const PREFS = ["北海道", "青森県", "岩手県", "宮城県", "秋�
   "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
   "鳥取県", "島根県", "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"];
 
+let baseCache = null;
 function baseList() {
+  if (baseCache) return baseCache;
   const list = catalog.map(m => ({ ...m, custom: false }));
-  for (const r of museumRecs.values()) if (r.custom?.name) list.push({ id: r.id, ...r.custom, aliases: [], custom: true });
-  return list;
+  for (const r of museumRecs.values()) if (r.custom?.name) list.push({ id: r.id, cc: r.custom.cc || "JP", country: r.custom.country || "日本", ...r.custom, aliases: [], custom: true });
+  for (const m of list) m._n = [m.name, m.en, ...(m.aliases || [])].filter(Boolean).map(norm);
+  return (baseCache = list);
 }
+export const isJapan = m => !m.cc || m.cc === "JP";
 
 // Which museum a work belongs to: chosen id, then name, then place (within 400 m).
 export function museumIdFor(w, list = baseList()) {
   if (w.museumId && list.some(m => m.id === w.museumId)) return w.museumId;
   const n = norm(w.museum);
   if (n.length >= 2) {
-    for (const m of list) {
-      const names = [m.name, ...(m.aliases || [])].map(norm);
-      if (names.some(x => x && (n === x || (x.length >= 4 && n.includes(x)) || (n.length >= 4 && x.includes(n))))) return m.id;
-    }
+    for (const m of list) if (m._n.includes(n)) return m.id; // exact name first
+    for (const m of list) if (m._n.some(x => x && ((x.length >= 4 && n.includes(x)) || (n.length >= 4 && x.includes(n))))) return m.id;
   }
   if (Number.isFinite(w.lat) && Number.isFinite(w.lng)) {
     let best = null, bd = 400;
@@ -61,6 +65,9 @@ export function museums(works) {
     if (!id) continue;
     const m = byId.get(id); m.works.push(w); if (w.visited) m.visits.add(w.visited.slice(0, 10));
   }
+  const t = today();
+  const openCount = new Map();
+  for (const e of allExhibitions()) if (e.museumId && isOpen(e, t)) openCount.set(e.museumId, (openCount.get(e.museumId) || 0) + 1);
   for (const m of byId.values()) {
     const r = museumRecs.get(m.id) || {};
     (r.visits || []).forEach(d => m.visits.add(d));
@@ -69,11 +76,12 @@ export function museums(works) {
     m.want = r.status === "want";
     m.note = r.note || "";
     m.status = m.went ? "went" : m.want ? "want" : "";
-    m.current = exhibitionsAt(m.id).filter(e => isOpen(e, today())).length;
+    m.current = openCount.get(m.id) || 0;
   }
   return [...byId.values()];
 }
 export function museumById(id) { return baseList().find(m => m.id === id) || null; }
+export const allMuseums = () => baseList();
 export const museumRec = id => museumRecs.get(id) || null;
 
 export async function setMuseumStatus(id, status) {
@@ -91,19 +99,20 @@ export async function addVisit(id, day) {
 }
 export async function addCustomMuseum(m) {
   const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  const rec = { id, status: m.status || "", custom: { name: m.name, pref: m.pref || "", city: m.city || "", lat: m.lat, lng: m.lng, url: m.url || "" }, visits: m.status === "went" ? [today()] : [] };
+  const rec = { id, status: m.status || "", custom: { name: m.name, pref: m.pref || "", city: m.city || "", lat: m.lat, lng: m.lng, url: m.url || "", cc: m.cc || "JP", country: m.country || "日本" }, visits: m.status === "went" ? [today()] : [] };
   museumRecs.set(id, await store.save("museums", rec));
+  baseCache = null;
   return id;
 }
-export async function removeCustomMuseum(id) { museumRecs.delete(id); await store.remove("museums", id); }
+export async function removeCustomMuseum(id) { museumRecs.delete(id); baseCache = null; await store.remove("museums", id); }
 
 // ---------- exhibitions ----------
 export const isOpen = (e, day) => (!e.start || e.start <= day) && (!e.end || e.end >= day);
 export function exhibitionsAt(museumId) { return allExhibitions().filter(e => e.museumId === museumId); }
 
 export function allExhibitions() {
-  const list = baseList();
-  const mus = id => list.find(m => m.id === id) || null;
+  const byId = new Map(baseList().map(m => [m.id, m]));
+  const mus = id => byId.get(id) || null;
   const out = [];
   for (const e of feed) out.push({ ...e, mine: false, museum: mus(e.museumId) });
   for (const e of events) out.push({ ...e, mine: true, museum: e.museumId ? mus(e.museumId) : null });
