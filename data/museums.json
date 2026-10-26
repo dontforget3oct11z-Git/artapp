@@ -1,0 +1,387 @@
+{
+ "updatedAt": "2026-10-26",
+ "museums": [
+  {
+   "id": "tnm",
+   "name": "東京国立博物館",
+   "aliases": [
+    "トーハク",
+    "東博"
+   ],
+   "pref": "東京都",
+   "city": "台東区",
+   "lat": 35.7188,
+   "lng": 139.7765,
+   "url": "https://www.tnm.jp/",
+   "exUrl": "https://www.tnm.jp/modules/r_calender/index.php?controller=item_list"
+  },
+  {
+   "id": "nmwa",
+   "name": "国立西洋美術館",
+   "aliases": [
+    "西美"
+   ],
+   "pref": "東京都",
+   "city": "台東区",
+   "lat": 35.7155,
+   "lng": 139.7757,
+   "url": "https://www.nmwa.go.jp/",
+   "exUrl": "https://www.nmwa.go.jp/jp/exhibitions/"
+  },
+  {
+   "id": "tobikan",
+   "name": "東京都美術館",
+   "aliases": [
+    "都美"
+   ],
+   "pref": "東京都",
+   "city": "台東区",
+   "lat": 35.7173,
+   "lng": 139.7728,
+   "url": "https://www.tobikan.jp/",
+   "exUrl": "https://www.tobikan.jp/exhibition/"
+  },
+  {
+   "id": "uenomori",
+   "name": "上野の森美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "台東区",
+   "lat": 35.7125,
+   "lng": 139.7745,
+   "url": "https://www.ueno-mori.org/",
+   "exUrl": "https://www.ueno-mori.org/exhibitions/"
+  },
+  {
+   "id": "nact",
+   "name": "国立新美術館",
+   "aliases": [
+    "新美"
+   ],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6653,
+   "lng": 139.7263,
+   "url": "https://www.nact.jp/",
+   "exUrl": "https://www.nact.jp/exhibition_special/"
+  },
+  {
+   "id": "mori",
+   "name": "森美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6604,
+   "lng": 139.7292,
+   "url": "https://www.mori.art.museum/",
+   "exUrl": "https://www.mori.art.museum/jp/exhibitions/"
+  },
+  {
+   "id": "suntory",
+   "name": "サントリー美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6662,
+   "lng": 139.7314,
+   "url": "https://www.suntory.co.jp/sma/",
+   "exUrl": "https://www.suntory.co.jp/sma/exhibition/"
+  },
+  {
+   "id": "2121",
+   "name": "21_21 DESIGN SIGHT",
+   "aliases": [
+    "21_21"
+   ],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6668,
+   "lng": 139.731,
+   "url": "https://www.2121designsight.jp/",
+   "exUrl": "https://www.2121designsight.jp/"
+  },
+  {
+   "id": "panasonic",
+   "name": "パナソニック汐留美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6627,
+   "lng": 139.7617,
+   "url": "https://panasonic.co.jp/ew/museum/",
+   "exUrl": "https://panasonic.co.jp/ew/museum/exhibition/"
+  },
+  {
+   "id": "nezu",
+   "name": "根津美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "港区",
+   "lat": 35.6623,
+   "lng": 139.7173,
+   "url": "https://www.nezu-muse.or.jp/",
+   "exUrl": "https://www.nezu-muse.or.jp/jp/exhibition/"
+  },
+  {
+   "id": "momat",
+   "name": "東京国立近代美術館",
+   "aliases": [
+    "MOMAT",
+    "近美"
+   ],
+   "pref": "東京都",
+   "city": "千代田区",
+   "lat": 35.6906,
+   "lng": 139.7547,
+   "url": "https://www.momat.go.jp/",
+   "exUrl": "https://www.momat.go.jp/exhibitions"
+  },
+  {
+   "id": "mimt",
+   "name": "三菱一号館美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "千代田区",
+   "lat": 35.6785,
+   "lng": 139.763,
+   "url": "https://mimt.jp/",
+   "exUrl": "https://mimt.jp/"
+  },
+  {
+   "id": "stationgallery",
+   "name": "東京ステーションギャラリー",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "千代田区",
+   "lat": 35.6812,
+   "lng": 139.766,
+   "url": "https://www.ejrcf.or.jp/gallery/",
+   "exUrl": "https://www.ejrcf.or.jp/gallery/"
+  },
+  {
+   "id": "artizon",
+   "name": "アーティゾン美術館",
+   "aliases": [
+    "旧ブリヂストン美術館"
+   ],
+   "pref": "東京都",
+   "city": "中央区",
+   "lat": 35.68,
+   "lng": 139.7704,
+   "url": "https://www.artizon.museum/",
+   "exUrl": "https://www.artizon.museum/exhibition/"
+  },
+  {
+   "id": "mot",
+   "name": "東京都現代美術館",
+   "aliases": [
+    "MOT"
+   ],
+   "pref": "東京都",
+   "city": "江東区",
+   "lat": 35.6795,
+   "lng": 139.8079,
+   "url": "https://www.mot-art-museum.jp/",
+   "exUrl": "https://www.mot-art-museum.jp/exhibitions/"
+  },
+  {
+   "id": "top",
+   "name": "東京都写真美術館",
+   "aliases": [
+    "TOP MUSEUM"
+   ],
+   "pref": "東京都",
+   "city": "目黒区",
+   "lat": 35.6418,
+   "lng": 139.7135,
+   "url": "https://topmuseum.jp/",
+   "exUrl": "https://topmuseum.jp/"
+  },
+  {
+   "id": "yamatane",
+   "name": "山種美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "渋谷区",
+   "lat": 35.6472,
+   "lng": 139.7238,
+   "url": "https://www.yamatane-museum.jp/",
+   "exUrl": "https://www.yamatane-museum.jp/exh/"
+  },
+  {
+   "id": "sompo",
+   "name": "SOMPO美術館",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "新宿区",
+   "lat": 35.6923,
+   "lng": 139.6957,
+   "url": "https://www.sompo-museum.org/",
+   "exUrl": "https://www.sompo-museum.org/exhibitions/"
+  },
+  {
+   "id": "operacity",
+   "name": "東京オペラシティ アートギャラリー",
+   "aliases": [],
+   "pref": "東京都",
+   "city": "新宿区",
+   "lat": 35.6833,
+   "lng": 139.6866,
+   "url": "https://www.operacity.jp/ag/",
+   "exUrl": "https://www.operacity.jp/ag/"
+  },
+  {
+   "id": "yokohama",
+   "name": "横浜美術館",
+   "aliases": [],
+   "pref": "神奈川県",
+   "city": "横浜市",
+   "lat": 35.4572,
+   "lng": 139.6312,
+   "url": "https://yokohama.art.museum/",
+   "exUrl": "https://yokohama.art.museum/exhibition/"
+  },
+  {
+   "id": "pola",
+   "name": "ポーラ美術館",
+   "aliases": [],
+   "pref": "神奈川県",
+   "city": "箱根町",
+   "lat": 35.2643,
+   "lng": 139.0386,
+   "url": "https://www.polamuseum.or.jp/",
+   "exUrl": "https://www.polamuseum.or.jp/exhibition/"
+  },
+  {
+   "id": "aichi",
+   "name": "愛知県美術館",
+   "aliases": [],
+   "pref": "愛知県",
+   "city": "名古屋市",
+   "lat": 35.172,
+   "lng": 136.9086,
+   "url": "https://www-art.aac.pref.aichi.jp/",
+   "exUrl": "https://www-art.aac.pref.aichi.jp/exhibition/"
+  },
+  {
+   "id": "kanazawa21",
+   "name": "金沢21世紀美術館",
+   "aliases": [],
+   "pref": "石川県",
+   "city": "金沢市",
+   "lat": 36.5609,
+   "lng": 136.6582,
+   "url": "https://www.kanazawa21.jp/",
+   "exUrl": "https://www.kanazawa21.jp/exhibition/"
+  },
+  {
+   "id": "kyohaku",
+   "name": "京都国立博物館",
+   "aliases": [
+    "京博"
+   ],
+   "pref": "京都府",
+   "city": "京都市",
+   "lat": 34.99,
+   "lng": 135.773,
+   "url": "https://www.kyohaku.go.jp/",
+   "exUrl": "https://www.kyohaku.go.jp/jp/exhibitions/"
+  },
+  {
+   "id": "momak",
+   "name": "京都国立近代美術館",
+   "aliases": [],
+   "pref": "京都府",
+   "city": "京都市",
+   "lat": 35.0123,
+   "lng": 135.7836,
+   "url": "https://www.momak.go.jp/",
+   "exUrl": "https://www.momak.go.jp/"
+  },
+  {
+   "id": "kyocera",
+   "name": "京都市京セラ美術館",
+   "aliases": [
+    "京都市美術館"
+   ],
+   "pref": "京都府",
+   "city": "京都市",
+   "lat": 35.0129,
+   "lng": 135.7826,
+   "url": "https://kyotocity-kyocera.museum/",
+   "exUrl": "https://kyotocity-kyocera.museum/exhibition"
+  },
+  {
+   "id": "narahaku",
+   "name": "奈良国立博物館",
+   "aliases": [
+    "奈良博"
+   ],
+   "pref": "奈良県",
+   "city": "奈良市",
+   "lat": 34.6835,
+   "lng": 135.8366,
+   "url": "https://www.narahaku.go.jp/",
+   "exUrl": "https://www.narahaku.go.jp/exhibition/"
+  },
+  {
+   "id": "nmao",
+   "name": "国立国際美術館",
+   "aliases": [],
+   "pref": "大阪府",
+   "city": "大阪市",
+   "lat": 34.6913,
+   "lng": 135.4918,
+   "url": "https://www.nmao.go.jp/",
+   "exUrl": "https://www.nmao.go.jp/exhibition/"
+  },
+  {
+   "id": "nakka",
+   "name": "大阪中之島美術館",
+   "aliases": [],
+   "pref": "大阪府",
+   "city": "大阪市",
+   "lat": 34.6915,
+   "lng": 135.493,
+   "url": "https://nakka-art.jp/",
+   "exUrl": "https://nakka-art.jp/exhibition/"
+  },
+  {
+   "id": "ohara",
+   "name": "大原美術館",
+   "aliases": [],
+   "pref": "岡山県",
+   "city": "倉敷市",
+   "lat": 34.5958,
+   "lng": 133.7708,
+   "url": "https://www.ohara.or.jp/",
+   "exUrl": "https://www.ohara.or.jp/"
+  },
+  {
+   "id": "kyuhaku",
+   "name": "九州国立博物館",
+   "aliases": [
+    "九博"
+   ],
+   "pref": "福岡県",
+   "city": "太宰府市",
+   "lat": 33.5185,
+   "lng": 130.538,
+   "url": "https://www.kyuhaku.jp/",
+   "exUrl": "https://www.kyuhaku.jp/exhibition/"
+  },
+  {
+   "id": "okimu",
+   "name": "沖縄県立博物館・美術館",
+   "aliases": [
+    "おきみゅー"
+   ],
+   "pref": "沖縄県",
+   "city": "那覇市",
+   "lat": 26.2245,
+   "lng": 127.6935,
+   "url": "https://okimu.jp/",
+   "exUrl": "https://okimu.jp/"
+  }
+ ]
+}

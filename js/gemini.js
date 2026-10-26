@@ -1,7 +1,7 @@
 // Gemini API (free tier) — called directly from the browser with the user's own free API key.
 // Uses the generateContent REST endpoint.
 import { AiError, addUsage, parseJson, toBase64, WORK_SCHEMA, PICKS_SCHEMA, SYSTEM_IDENTIFY,
-  identifyText, askSystem, recommendPrompt, previewPrompt } from "./common.js";
+  identifyText, askSystem, recommendPrompt, previewPrompt, EVENT_SCHEMA, eventPrompt } from "./common.js";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -88,11 +88,11 @@ async function callWithBackup(key, model, body, opts) {
 
 const imagePart = async blob => ({ inlineData: { mimeType: blob.type || "image/jpeg", data: await toBase64(blob) } });
 
-export async function identify({ key, model, art, label, museum, place }) {
+export async function identify({ key, model, art, label, museum, place, unknown }) {
   const parts = [];
   if (art) parts.push(await imagePart(art));
   if (label) parts.push(await imagePart(label));
-  parts.push({ text: identifyText({ hasArt: !!art, hasLabel: !!label, museum, place }) });
+  parts.push({ text: identifyText({ hasArt: !!art, hasLabel: !!label, museum, place, unknown }) });
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_IDENTIFY }] },
     contents: [{ role: "user", parts }],
@@ -158,6 +158,16 @@ async function picks(key, model, prompt) {
 }
 export const recommend = ({ key, model }, works) => picks(key, model, recommendPrompt(works));
 export const preview = ({ key, model }, place) => picks(key, model, previewPrompt(place));
+
+export async function extractEvent({ key, model }, { image, text, todayStr }) {
+  const parts = [];
+  if (image) parts.push(await imagePart(image));
+  parts.push({ text: eventPrompt({ hasImage: !!image, text, todayStr }) });
+  const body = { contents: [{ role: "user", parts }], safetySettings: SAFETY,
+    generationConfig: { responseMimeType: "application/json", responseSchema: toGeminiSchema(EVENT_SCHEMA) } };
+  const { data } = await callWithBackup(key, model, body, { kind: "event" });
+  return parseJson(textOf(data));
+}
 
 // Free check: reading a model's info costs nothing and uses no quota for generation.
 export async function testKey(key) {

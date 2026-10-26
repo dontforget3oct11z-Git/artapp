@@ -1,0 +1,4 @@
+Firebase JavaScript SDK 13.1.0 (firebase/app, firebase/auth, firebase/firestore/lite)
+Copyright Google LLC
+Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+Bundled with esbuild into vendor/firebase.js. Original license comments are kept at the end of that file.

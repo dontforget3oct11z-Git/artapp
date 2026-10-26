@@ -2,7 +2,7 @@
 // Bundled from @anthropic-ai/sdk@0.133.0 (see vendor/).
 import Anthropic from "../vendor/anthropic-sdk.js";
 import { AiError, addUsage, parseJson, extractJson, toBase64, WORK_SCHEMA, PICKS_SCHEMA, SYSTEM_IDENTIFY,
-  identifyText, askSystem, recommendPrompt, previewPrompt } from "./common.js";
+  identifyText, askSystem, recommendPrompt, previewPrompt, EVENT_SCHEMA, eventPrompt } from "./common.js";
 
 export const MODELS = {
   "claude-haiku-5-5":  { name: "Claude Haiku 5.5（1枚 約0.3円）",   inUsd: 0.1, outUsd: 0.5, fallback: false },
@@ -70,11 +70,11 @@ async function run(key, params, { onText, signal, kind } = {}) {
 
 const imageBlock = async blob => ({ type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data: await toBase64(blob) } });
 
-export async function identify({ key, model, webSearch, art, label, museum, place }) {
+export async function identify({ key, model, webSearch, art, label, museum, place, unknown }) {
   const content = [];
   if (art) content.push(await imageBlock(art));
   if (label) content.push(await imageBlock(label));
-  content.push({ type: "text", text: identifyText({ hasArt: !!art, hasLabel: !!label, museum, place }) +
+  content.push({ type: "text", text: identifyText({ hasArt: !!art, hasLabel: !!label, museum, place, unknown }) +
     (webSearch ? `\n必要ならWeb検索で作品名・所蔵館を確認してください。最後に、次のキーを持つJSONオブジェクトだけを出力してください：${WORK_SCHEMA.required.join(", ")}` : "") });
   const extra = { system: SYSTEM_IDENTIFY, messages: [{ role: "user", content }], output_config: { effort: "medium" } };
   if (webSearch) extra.tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }];
@@ -100,6 +100,15 @@ async function picks(key, model, prompt) {
 }
 export const recommend = ({ key, model }, works) => picks(key, model, recommendPrompt(works));
 export const preview = ({ key, model }, place) => picks(key, model, previewPrompt(place));
+
+export async function extractEvent({ key, model }, { image, text, todayStr }) {
+  const content = [];
+  if (image) content.push(await imageBlock(image));
+  content.push({ type: "text", text: eventPrompt({ hasImage: !!image, text, todayStr }) });
+  const msg = await run(key, baseParams(model, { messages: [{ role: "user", content }],
+    output_config: { effort: "low", format: { type: "json_schema", schema: EVENT_SCHEMA } } }), { kind: "event" });
+  return parseJson(textOf(msg));
+}
 
 // Free check: reading a model's info costs nothing.
 export async function testKey(key) {

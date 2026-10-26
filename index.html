@@ -27,6 +27,7 @@
       <div class="sub">美術館で撮った作品を、名前と解説つきで残す</div>
     </div>
     <div class="top-right">
+      <span class="sync-dot" id="syncDot" hidden></span>
       <span class="small muted mono" id="count"></span>
       <button class="icon-btn" id="btnSettings" aria-label="設定">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
@@ -56,13 +57,25 @@
     <div class="wall" id="wall"></div>
   </section>
 
-  <!-- 美術館（地図＋記録） -->
+  <!-- 美術館 -->
   <section class="view" id="v-museums" hidden>
-    <h2>美術館マップ</h2>
-    <div id="map" class="map" role="region" aria-label="作品を撮った場所の地図"></div>
+    <div class="row" style="justify-content:space-between"><h2>美術館</h2><button class="btn small" id="mAdd">＋ 美術館を追加</button></div>
+    <div class="tally" id="mTally"></div>
+    <div class="row" style="justify-content:space-between">
+      <div class="chips" id="mFilter" aria-label="絞り込み">
+        <button class="chip" data-f="all" aria-pressed="true">すべて</button>
+        <button class="chip" data-f="went" aria-pressed="false">行った</button>
+        <button class="chip" data-f="want" aria-pressed="false">行きたい</button>
+        <button class="chip" data-f="" aria-pressed="false">まだ</button>
+      </div>
+      <div class="seg" id="mSeg" role="group" aria-label="表示">
+        <button data-m="map" aria-pressed="true">地図</button><button data-m="list" aria-pressed="false">一覧</button><button data-m="log" aria-pressed="false">記録</button>
+      </div>
+    </div>
+    <div id="map" class="map" role="region" aria-label="美術館の地図"></div>
     <p class="small muted" id="mapNote" style="margin:0"></p>
-    <h3>訪問の記録</h3>
-    <div class="timeline" id="timeline"></div>
+    <div id="mList" class="mlist" hidden></div>
+    <div id="timelineWrap" hidden><div class="timeline" id="timeline"></div></div>
   </section>
 
   <!-- スキャン -->
@@ -96,8 +109,34 @@
       <button class="btn primary" id="btnIdentify" disabled>AIで識別する</button>
       <button class="btn ghost" id="btnManual">手入力で保存</button>
     </div>
+    <div class="box bulk-box">
+      <div class="row" style="justify-content:space-between"><div><b>撮りためた写真をまとめて登録</b><div class="small muted">カメラロールから何枚でも選べます。撮影日と場所は写真から読み取ります。</div></div>
+      <label class="btn" for="inBulk">写真を選ぶ</label></div>
+      <input id="inBulk" type="file" accept="image/*" multiple hidden>
+    </div>
     <div id="scanStatus" class="status" hidden></div>
     <div id="result" class="view" hidden></div>
+  </section>
+
+  <!-- 展示（カレンダー） -->
+  <section class="view" id="v-calendar" hidden>
+    <div class="row" style="justify-content:space-between"><h2>展示カレンダー</h2><button class="btn small" id="calAdd">＋ 展示を追加</button></div>
+    <div class="row" style="justify-content:space-between">
+      <div class="chips" id="calFilter" aria-label="表示する展示">
+        <button class="chip" data-f="mine" aria-pressed="true">行った・行きたい美術館</button>
+        <button class="chip" data-f="want" aria-pressed="false">☆ 行きたい展示</button>
+        <button class="chip" data-f="all" aria-pressed="false">すべて</button>
+      </div>
+      <select class="select" id="calPref" aria-label="地域"></select>
+    </div>
+    <div class="row status small" id="calMuseum" hidden></div>
+    <div class="cal">
+      <div class="cal-hd"><button class="icon-btn" id="calPrev" aria-label="前の月">‹</button><b id="calMonth"></b><button class="icon-btn" id="calNext" aria-label="次の月">›</button><button class="btn small ghost" id="calToday">今日</button></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="small muted cal-key"><span class="ev plan">予定</span><i class="m went"></i>行った日 <i class="m start"></i>行きたい展示の初日 <i class="m end"></i>最終日</div>
+    </div>
+    <div class="exlist" id="calList"></div>
+    <p class="small muted" id="calInfo" style="margin:0"></p>
   </section>
 
   <!-- 発見 -->
@@ -121,8 +160,9 @@
 <nav class="tabs" aria-label="メイン">
   <div class="in">
     <button data-tab="collection" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="6"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="15" width="7" height="6"/></svg>コレクション</button>
-    <button data-tab="museums"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>マップ</button>
+    <button data-tab="museums"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 20h18"/></svg>美術館</button>
     <button data-tab="scan" class="scan-btn"><span class="scan-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="3.5"/></svg></span>スキャン</button>
+    <button data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="8" cy="14.5" r="1" fill="currentColor"/></svg>展示</button>
     <button data-tab="discover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>発見</button>
   </div>
 </nav>

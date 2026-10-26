@@ -1,10 +1,12 @@
 import * as store from "./store.js";
 import * as ai from "./ai.js";
 import { verify, merge } from "./verify.js";
-
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+import * as sync from "./sync.js";
+import * as P from "./places.js";
+import * as museumsTab from "./museums.js";
+import * as calendarTab from "./calendar.js";
+import * as bulk from "./bulk.js";
+import { $, esc, today, toast, openSheet, closeSheet, onSheetClose, app, loadImg, toBlob, reverseGeocode, photoMeta, dist } from "./ui.js";
 const yen = usd => { const y = usd * ai.USD_JPY; return "¥" + (y < 10 ? y.toFixed(1) : Math.round(y).toLocaleString("ja-JP")); };
 
 /* ================= sample works (only while the collection is empty) ================= */
@@ -44,24 +46,13 @@ const visible = () => works.length ? works : SAMPLES;
 const findWork = id => visible().find(x => x.id === id);
 
 async function reload() {
-  try { works = await store.all(); }
+  try { works = await store.all(); await P.loadLocal(); }
   catch (e) { works = []; toast("データを読み込めませんでした：" + e.message); }
   render();
 }
-
-/* ================= images ================= */
-function loadImg(file) {
-  return new Promise((res, rej) => {
-    const u = URL.createObjectURL(file); const i = new Image();
-    i.onload = () => res(i); i.onerror = () => rej(new Error("decode")); i.src = u;
-  });
-}
-function toBlob(img, max, q = .82) {
-  const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-  const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
-  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-  return new Promise(r => c.toBlob(r, "image/jpeg", q));
-}
+// Changes that arrived from the other device.
+let remoteT = null;
+store.onChange((name, local) => { if (!local) { clearTimeout(remoteT); remoteT = setTimeout(reload, 300); } });
 
 /* ================= scan ================= */
 const shots = { art: null, label: null }; // {img, file}
@@ -112,27 +103,23 @@ async function locate(file) {
   if (!found) { if (!geo) $("#geoNote").textContent = ""; return; }
   geo = found;
   $("#geoNote").textContent = found.source === "photo" ? "写真の位置情報を記録します" : "現在地を記録します";
-  const place = await reverseGeocode(found.lat, found.lng);
+  const near = nearestMuseum(found);
+  const place = near ? near.name : await reverseGeocode(found.lat, found.lng);
+  if (near) geo.museumId = near.id;
   if (place) {
     geo.place = place;
     if (!$("#inMuseum").value.trim()) $("#inMuseum").value = place;
     $("#geoNote").textContent += `（${place} 付近）`;
   }
 }
+// A museum from the list within 400 m of the photo.
+function nearestMuseum(pt) {
+  let best = null, bd = 400;
+  for (const m of P.museums([])) if (Number.isFinite(m.lat)) { const d = dist(pt, m); if (d < bd) { bd = d; best = m; } }
+  return best;
+}
 // Photos taken just now (camera) get the current location; old library photos don't.
 function isFresh(file) { return !file.lastModified || Date.now() - file.lastModified < 30 * 60 * 1000; }
-
-async function reverseGeocode(lat, lng) {
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&accept-language=ja`);
-    if (!r.ok) return "";
-    const j = await r.json();
-    const a = j.address || {};
-    const isVenue = ["museum", "gallery", "arts_centre", "attraction"].includes(j.type) || ["tourism", "amenity"].includes(j.category);
-    if (j.name && isVenue) return j.name;
-    return j.name || a.museum || a.tourism || a.amenity || "";
-  } catch { return ""; }
-}
 
 function updateIdentify() {
   const hasKey = !!ai.settings.apiKey;
@@ -246,7 +233,9 @@ function showResult(r, cost, used, note) {
       if (shots.label) { w.labelImage = await toBlob(shots.label.img, 1400, .8); if (!w.thumb) w.thumb = await toBlob(shots.label.img, 520, .76); }
       w.visited = $("#inDate").value || today();
       w.createdAt = Date.now();
+      w.byName = sync.myName();
       if (geo) { w.lat = geo.lat; w.lng = geo.lng; w.place = geo.place || ""; }
+      w.museumId = P.museumIdFor(w) || "";
       delete w.alternatives; delete w.manual;
       await store.put(w);
       store.persist();
@@ -273,7 +262,7 @@ function groupValues(list) {
 }
 function cardHtml(w) {
   return `<button class="work" data-id="${esc(w.id)}">
-    <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="${esc(w.title)}" loading="lazy">` : ""}${w.sample ? `<span class="badge">サンプル</span>` : ""}${w.fav ? `<span class="fav-mark" aria-label="お気に入り">♥</span>` : ""}</div>
+    <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="${esc(w.title)}" loading="lazy">` : ""}${w.sample ? `<span class="badge">サンプル</span>` : w.needsReview ? `<span class="badge review">要確認</span>` : ""}${w.fav ? `<span class="fav-mark" aria-label="お気に入り">♥</span>` : ""}</div>
     <div class="label"><div class="artist">${esc(w.artist || "作家不明")}</div><div class="title">${esc(w.title || "無題")}${w.year ? `、${esc(w.year)}` : ""}</div><div class="meta">${esc(w.museum || "")}</div></div>
   </button>`;
 }
@@ -298,8 +287,8 @@ function render() {
   $("#wall").innerHTML = shown.length ? shown.map(cardHtml).join("") :
     `<div class="empty" style="grid-column:1/-1"><strong>見つかりませんでした</strong><span class="muted small">${group === "fav" ? "作品の詳細画面で ♡ を押すと、お気に入りに入ります。" : "別の言葉で検索するか、絞り込みを「すべて」に戻してください。"}</span></div>`;
   $("#museumList").innerHTML = [...new Set(works.map(w => w.museum).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join("");
-  renderTimeline();
-  if (!$("#v-museums").hidden) renderMap();
+  if (!$("#v-museums").hidden) museumsTab.render();
+  if (!$("#v-calendar").hidden) calendarTab.render();
 }
 $("#q").oninput = render;
 $("#sort").onchange = render;
@@ -307,75 +296,9 @@ $("#groupChips").onclick = e => { const b = e.target.closest(".chip"); if (!b) r
 $("#chips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; filterVal = b.dataset.v; render(); };
 $("#wall").onclick = e => { const b = e.target.closest(".work"); if (b) openDetail(b.dataset.id); };
 
-/* ================= map + timeline ================= */
-let map = null, layer = null;
-function renderMap() {
-  if (!window.L) { $("#mapNote").textContent = "地図を読み込めませんでした。インターネット接続を確認してください。"; return; }
-  if (!map) {
-    map = L.map("map", { zoomControl: true, attributionControl: true }).setView([35.68, 139.76], 5);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
-    layer = L.layerGroup().addTo(map);
-    map.getContainer().addEventListener("click", e => { const b = e.target.closest("[data-id]"); if (b) openDetail(b.dataset.id); });
-  }
-  setTimeout(() => map.invalidateSize(), 0);
-  layer.clearLayers();
-  const placed = visible().filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lng));
-  // one pin per museum (or per ~100m spot when the museum is unknown)
-  const groups = new Map();
-  for (const w of placed) {
-    const k = w.museum || `${w.lat.toFixed(3)},${w.lng.toFixed(3)}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(w);
-  }
-  const pts = [];
-  for (const [name, ws] of groups) {
-    const lat = ws.reduce((s, w) => s + w.lat, 0) / ws.length, lng = ws.reduce((s, w) => s + w.lng, 0) / ws.length;
-    pts.push([lat, lng]);
-    const html = `<div class="pop-title">${esc(ws[0].museum || ws[0].place || "撮影地")}</div>
-      <div class="small muted">${ws.length}点</div>
-      <div class="pop-strip">${ws.slice(0, 12).map(w => `<button data-id="${esc(w.id)}" aria-label="${esc(w.title)}"><img src="${thumbOf(w)}" alt=""></button>`).join("")}</div>`;
-    L.circleMarker([lat, lng], { radius: 8 + Math.min(10, ws.length * 1.5), color: "#8a2f1d", weight: 2, fillColor: "#8a2f1d", fillOpacity: .55 })
-      .bindPopup(html).addTo(layer);
-  }
-  if (pts.length === 1) map.setView(pts[0], 15);
-  else if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
-  const missing = visible().length - placed.length;
-  $("#mapNote").textContent = (works.length ? "" : "サンプルの撮影地を表示しています。") +
-    (missing > 0 ? `位置情報のない作品が${missing}点あります（写真の位置情報か、撮影時の現在地を記録します）。` : "");
-}
-function renderTimeline() {
-  const groups = {};
-  visible().forEach(w => { const k = (w.museum || "美術館未記入") + "|" + (w.visited || "").slice(0, 10); (groups[k] ||= []).push(w); });
-  const keys = Object.keys(groups).sort((a, b) => b.split("|")[1].localeCompare(a.split("|")[1]));
-  $("#timeline").innerHTML = keys.map(k => {
-    const [m, d] = k.split("|"); const ws = groups[k];
-    const artists = [...new Set(ws.map(w => w.artist).filter(Boolean))].join("、");
-    return `<div class="museum">
-      <div class="hd"><h3>${esc(m)}</h3><span class="yr">${esc(d.replace(/-/g, "."))} ・ ${ws.length}点</span></div>
-      <div class="strip">${ws.map(w => `<button data-id="${esc(w.id)}" aria-label="${esc(w.title)}"><div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="">` : ""}</div></button>`).join("")}</div>
-      <div class="small muted">${esc(artists)}</div>
-    </div>`;
-  }).join("") || `<div class="empty">まだ記録がありません。</div>`;
-}
-$("#timeline").onclick = e => { const b = e.target.closest("button[data-id]"); if (b) openDetail(b.dataset.id); };
-
 /* ================= detail ================= */
 let askAbort = null;
-function openSheet(html) {
-  const sh = $("#sheet"); $("#sheetIn").innerHTML = html;
-  if (sh.hidden) { sh.hidden = false; document.body.style.overflow = "hidden"; history.pushState({ sheet: 1 }, ""); }
-  sh.scrollTop = 0;
-}
-function closeSheet(fromPop) {
-  if ($("#sheet").hidden) return;
-  askAbort?.abort();
-  $("#sheet").hidden = true; document.body.style.overflow = "";
-  if (!fromPop && history.state?.sheet) history.back();
-}
-window.addEventListener("popstate", () => closeSheet(true));
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+onSheetClose(() => askAbort?.abort());
 
 function openDetail(id) {
   const w = findWork(id); if (!w) return;
@@ -394,6 +317,8 @@ function openDetail(id) {
         ${confHtml(w.confidence)}
         <dl>${meta.map(([k, v, so]) => `<dt>${k}</dt><dd>${esc(v)}${srcBadge(so)}</dd>`).join("")}</dl>
         ${w.sample ? "" : verifyBanner(w)}
+        ${w.needsReview ? `<div class="verify warn small row" style="justify-content:space-between"><span>まとめて登録した作品です。AIの自信が低めなので、内容を確かめてください。</span><button class="btn small" id="dReviewed">確認しました</button></div>` : ""}
+        ${w.byName && sync.enabled() ? `<div class="small muted">登録：${esc(w.byName)}</div>` : ""}
         ${(w.tags || []).length ? `<div class="chips" style="flex-wrap:wrap">${w.tags.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>
     </div>
@@ -413,6 +338,7 @@ function openDetail(id) {
     $("#dEdit").onclick = () => editDetail(w);
     $("#dFav").onclick = async () => { w.fav = !w.fav; await store.put(stripUrls(w)); await reload(); openDetail(w.id); };
     $("#dShare").onclick = () => share(w);
+    if ($("#dReviewed")) $("#dReviewed").onclick = async () => { const n = stripUrls(w); delete n.needsReview; await store.put(n); await reload(); openDetail(w.id); };
     $("#dDel").onclick = () => {
       $("#delRow").innerHTML = `<span class="small">本当に削除しますか？元に戻せません。</span><button class="btn danger" id="dDelYes">削除する</button><button class="btn ghost" id="dDelNo">やめる</button>`;
       $("#dDelYes").onclick = async () => { try { await store.del(w.id); closeSheet(); await reload(); toast("削除しました"); } catch { toast("削除できませんでした"); } };
@@ -506,7 +432,7 @@ function keyBox(p) {
     </div>`;
 }
 
-function openSettings() {
+function openSettings(opts = {}) {
   const u = ai.usage();
   const s = ai.settings;
   const prov = s.provider;
@@ -525,6 +451,7 @@ function openSettings() {
       ${prov === "claude" ? `<label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき5〜10円ほど増え、時間も少し長くなります。</span></span></label>` : ""}
       <label class="check"><input type="checkbox" id="sGeo" ${settingsGet("geo", "1") === "1" ? "checked" : ""}><span>撮影した場所を記録する<br><span class="small muted">マップに表示するためです。写真に位置情報があればそれを使い、なければその場で撮った時だけ現在地を使います。</span></span></label>
     </div>
+    <div class="box" id="shareBox"></div>
     ${keyBox("gemini")}
     ${keyBox("claude")}
     <div class="box">
@@ -544,6 +471,7 @@ function openSettings() {
       <div class="small muted">ArtScan（ArtScan AI LLC）の機能を参考に作った個人用アプリです。名前は museum（美術館）と muse（ひらめきの女神）から。APIキーはこの端末のブラウザの中だけに保存され、AIへの問い合わせ以外には送られません。地図データ © OpenStreetMap contributors。</div>
     </div>`);
   $("#sClose").onclick = () => closeSheet();
+  renderShareBox(opts.join);
   $("#sheetIn").querySelectorAll("button[data-act]").forEach(b => b.onclick = async () => {
     const p = b.dataset.p, input = $("#sKey-" + p), msg = $("#sKeyMsg-" + p);
     if (b.dataset.act === "show") { input.type = input.type === "password" ? "text" : "password"; return; }
@@ -575,25 +503,121 @@ function openSettings() {
     catch (err) { $("#sBackupMsg").textContent = "読み込めませんでした：" + err.message; }
   };
 }
-$("#btnSettings").onclick = openSettings;
+$("#btnSettings").onclick = () => openSettings();
+
+/* ================= sharing ================= */
+const SETUP_URL = "https://github.com/dontforget3oct11z-Git/artapp#家族と共有する設定";
+function renderShareBox(joinCode) {
+  const box = $("#shareBox"); if (!box) return;
+  const st = sync.state;
+  if (!sync.enabled()) {
+    box.innerHTML = `<h3>家族と共有</h3>
+      <div class="small muted">別のスマホ（ご家族など）と、作品・美術館の記録・展示の予定を共有できます。無料のFirebase（Google）を使います。</div>
+      <div class="seg" role="tablist"><button data-sh="join" aria-pressed="${joinCode ? "true" : "false"}">招待コードで参加</button><button data-sh="new" aria-pressed="false">最初の1台として始める</button></div>
+      <div id="shPane"></div>`;
+    const pane = mode => {
+      box.querySelectorAll("[data-sh]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sh === mode)));
+      $("#shPane").innerHTML = mode === "join" ? `
+        <div class="field"><label for="shCode">招待コード（または招待リンク）</label><textarea id="shCode" style="min-height:70px" placeholder="ARTMUSE- で始まる文字列">${esc(joinCode || "")}</textarea></div>
+        <div class="field"><label for="shName">あなたの名前（相手に表示）</label><input id="shName" placeholder="例：ゆき"></div>
+        <div class="row"><button class="btn primary" id="shJoin">参加する</button></div>
+        <div class="small muted" id="shMsg">もう1台のスマホの「設定 → 家族と共有」に出ている招待コードを貼ってください。</div>` : `
+        <details class="small"><summary>Firebaseの準備（最初に1回、約10分）</summary><ol class="steps">
+          <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebaseコンソール</a>でプロジェクトを作る（Googleアナリティクスはオフで可）</li>
+          <li>「Authentication」→「始める」→「ログイン方法」で「匿名」を有効にする</li>
+          <li>「Firestore Database」→「データベースを作成」（場所は asia-northeast1 東京）</li>
+          <li>Firestoreの「ルール」に、<a href="${SETUP_URL}" target="_blank" rel="noopener">説明ページ</a>のルールを貼って「公開」</li>
+          <li>プロジェクトの設定（歯車）→「マイアプリ」→ ウェブ（&lt;/&gt;）を登録し、表示された firebaseConfig をコピー</li>
+        </ol></details>
+        <div class="field"><label for="shCfg">firebaseConfig を貼り付け</label><textarea id="shCfg" style="min-height:90px" placeholder="const firebaseConfig = { apiKey: ..., projectId: ... };"></textarea></div>
+        <div class="field"><label for="shName">あなたの名前（相手に表示）</label><input id="shName" placeholder="例：たけし"></div>
+        <div class="row"><button class="btn primary" id="shNew">共有を始める</button></div>
+        <div class="small muted" id="shMsg">この端末の作品もすべて共有されます。</div>`;
+      const run = async (fn) => {
+        const msg = $("#shMsg"); msg.innerHTML = '<span class="spinner"></span>つないでいます…';
+        try { await fn(); toast("共有を始めました"); renderShareBox(); }
+        catch (e) { msg.textContent = e.message; }
+      };
+      if ($("#shJoin")) $("#shJoin").onclick = () => {
+        const inv = sync.parseInvite($("#shCode").value);
+        if (!inv) { $("#shMsg").textContent = "招待コードを読み取れませんでした。ARTMUSE- から最後までコピーしてください。"; return; }
+        run(() => sync.join(inv, $("#shName").value.trim()));
+      };
+      if ($("#shNew")) $("#shNew").onclick = () => {
+        const cfg = sync.parseFirebaseConfig($("#shCfg").value);
+        if (!cfg) { $("#shMsg").textContent = "firebaseConfig を読み取れませんでした。apiKey と projectId を含めてコピーしてください。"; return; }
+        run(() => sync.create(cfg, $("#shName").value.trim()));
+      };
+    };
+    box.querySelectorAll("[data-sh]").forEach(b => b.onclick = () => pane(b.dataset.sh));
+    pane(joinCode ? "join" : "join");
+    return;
+  }
+  const names = Object.values(st.names || {}).filter(Boolean);
+  const when = st.last ? new Date(st.last).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "";
+  box.innerHTML = `<h3>家族と共有</h3>
+    <div class="sync-line ${st.phase}">${st.phase === "syncing" ? '<span class="spinner"></span>同期しています…' : st.phase === "error" ? esc(st.error) : when ? `共有中・${when}に同期しました` : "共有中"}</div>
+    ${names.length ? `<div class="small">メンバー：${names.map(esc).join("、")}</div>` : ""}
+    <div class="field"><label for="shMyName">あなたの名前</label><div class="row"><input id="shMyName" class="search" value="${esc(sync.myName())}"><button class="btn small" id="shRename">変更</button></div></div>
+    <div class="field"><label>招待コード（相手のスマホの「招待コードで参加」に貼る）</label><div class="code mono small" id="shInvite">${esc(sync.inviteCode())}</div></div>
+    <div class="row"><button class="btn primary" id="shSend">招待を送る</button><button class="btn" id="shCopy">コードをコピー</button><button class="btn ghost" id="shNow">今すぐ同期</button></div>
+    <div class="small muted">招待コードを知っている人は誰でも参加できます。家族以外には送らないでください。</div>
+    <div class="row"><button class="btn ghost danger small" id="shLeave">この端末の共有をやめる</button></div>`;
+  $("#shRename").onclick = async () => { await sync.rename($("#shMyName").value.trim()); toast("名前を変えました"); };
+  $("#shCopy").onclick = async () => { try { await navigator.clipboard.writeText(sync.inviteCode()); toast("コピーしました"); } catch { const r = document.createRange(); r.selectNodeContents($("#shInvite")); getSelection().removeAllRanges(); getSelection().addRange(r); } };
+  $("#shSend").onclick = async () => {
+    const text = `ArtMuseで作品の記録を共有しましょう。\n1. ${new URL("./", location.href).href} を開いてホーム画面に追加\n2. 設定 → 家族と共有 →「招待コードで参加」に次のコードを貼る\n\n${sync.inviteCode()}`;
+    try { if (navigator.share) await navigator.share({ text }); else { await navigator.clipboard.writeText(text); toast("招待文をコピーしました"); } } catch {}
+  };
+  $("#shNow").onclick = () => sync.syncNow();
+  $("#shLeave").onclick = () => {
+    if (!confirm("この端末の共有をやめますか？この端末の作品は残ります。もう一度参加するには招待コードが必要です。")) return;
+    sync.leave(); renderShareBox(); toast("共有をやめました");
+  };
+}
+sync.onState(() => { renderShareBox(); renderSyncDot(); });
+function renderSyncDot() {
+  const d = $("#syncDot"); if (!d) return;
+  const st = sync.state;
+  d.hidden = !sync.enabled();
+  d.className = "sync-dot " + st.phase;
+  d.title = st.phase === "error" ? st.error : st.phase === "syncing" ? "同期中" : "共有中";
+}
 
 /* ================= tabs & misc ================= */
-const TABS = ["collection", "museums", "scan", "discover"];
+const TABS = ["collection", "museums", "scan", "calendar", "discover"];
 function go(tab) {
   TABS.forEach(t => { $("#v-" + t).hidden = t !== tab; });
   document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   window.scrollTo(0, 0);
-  if (tab === "museums") renderMap();
+  if (tab === "museums") museumsTab.render();
+  if (tab === "calendar") calendarTab.render();
   if (tab === "scan") updateIdentify();
   try { history.replaceState(history.state, "", "#" + tab); } catch {}
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.tab));
-let tt; function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+
+/* ================= start ================= */
+Object.assign(app, {
+  works: () => works, thumbOf, openDetail, go, reload,
+  openMuseum: id => museumsTab.openMuseum(id),
+  refreshMuseums: () => { if (!$("#v-museums").hidden) museumsTab.render(); },
+  showExhibitionsFor: id => calendarTab.showExhibitionsFor(id),
+  normalize, nearestMuseum, verify, merge, updateIdentify,
+});
+museumsTab.init();
+calendarTab.init();
+bulk.init();
 
 $("#inDate").value = today();
-const h = location.hash.slice(1); if (TABS.includes(h)) go(h);
+const h = location.hash.slice(1);
+if (h.startsWith("join=")) { history.replaceState(null, "", location.pathname); openSettings({ join: decodeURIComponent(h.slice(5)) }); }
+else if (TABS.includes(h)) go(h);
 updateIdentify();
+P.loadCatalog().then(() => render());
 reload();
+renderSyncDot();
+sync.start();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});

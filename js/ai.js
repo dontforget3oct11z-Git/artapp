@@ -34,9 +34,9 @@ function current() {
 
 export const isFree = () => settings.provider === "gemini";
 
-export async function identify({ art, label, museum, place }) {
+export async function identify({ art, label, museum, place, unknown }) {
   const c = current();
-  const data = await c.impl.identify({ key: c.key, model: c.model, webSearch: c.p === "claude" && settings.webSearch, art, label, museum, place });
+  const data = await c.impl.identify({ key: c.key, model: c.model, webSearch: c.p === "claude" && settings.webSearch, art, label, museum, place, unknown });
   return { data, provider: c.p, model: c.model };
 }
 
@@ -52,4 +52,5 @@ export async function identifyPrecise({ art, label, museum, place }) {
 export function ask(work, history, question, opts) { const c = current(); return c.impl.ask({ key: c.key, model: c.model }, work, history, question, opts); }
 export function recommend(works) { const c = current(); return c.impl.recommend({ key: c.key, model: c.model }, works); }
 export function preview(place) { const c = current(); return c.impl.preview({ key: c.key, model: c.model }, place); }
+export function extractEvent(args) { const c = current(); return c.impl.extractEvent({ key: c.key, model: c.model }, args); }
 export function testKey(provider, key) { return PROVIDERS[provider].impl.testKey(key); }

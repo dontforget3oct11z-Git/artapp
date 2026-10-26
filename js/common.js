@@ -103,8 +103,9 @@ export const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員
 
 作品を特定できない場合（現代作家の作品、個人蔵、写真が不鮮明など）は、title と artist を空文字にして confidence を low にし、候補があれば alternatives に入れてください。`;
 
-export function identifyText({ hasArt, hasLabel, museum, place }) {
-  const what = hasArt && hasLabel ? "1枚目は作品、2枚目はその作品の解説ラベル（キャプション）の写真です。"
+export function identifyText({ hasArt, hasLabel, museum, place, unknown }) {
+  const what = unknown ? "作品の写真か、作品の横の解説ラベル（キャプション）の写真のどちらかです。ラベルの写真なら、文字を labelText に書き起こし、ラベルの内容から作品カードを作り、tags の最初に「ラベル」と入れてください。"
+    : hasArt && hasLabel ? "1枚目は作品、2枚目はその作品の解説ラベル（キャプション）の写真です。"
     : hasArt ? "作品の写真です。" : "作品の解説ラベル（キャプション）の写真です。";
   let ctx = "";
   if (museum) ctx += `撮影した場所：${museum}\n`;
@@ -144,4 +145,24 @@ export function recommendPrompt(works) {
 }
 export function previewPrompt(place) {
   return `これから「${place}」に行きます。そこで見逃せない作品を最大6点、日本語で教えてください。taste には、その美術館・展覧会の特徴と回り方のコツを2文で。picks の where には館内の展示場所や時期の注意（常設か、展示替えがあるか等）を、わかる範囲で書いてください。確かでないことは「〜の可能性があります」と書いてください。`;
+}
+
+// ---------------- exhibition from a flyer / poster / pasted text ----------------
+export const EVENT_SCHEMA = {
+  type: "object", additionalProperties: false,
+  required: ["title", "venue", "start", "end", "url", "summary", "found"],
+  properties: {
+    title: { type: "string" }, venue: { type: "string" }, start: { type: "string" }, end: { type: "string" },
+    url: { type: "string" }, summary: { type: "string" }, found: { type: "boolean" },
+  },
+};
+export function eventPrompt({ hasImage, text, todayStr }) {
+  return `今日は${todayStr}です。${hasImage ? "写真は展覧会のチラシ・ポスター・看板などです。" : ""}${text ? `次の文章は展覧会の案内です。\n---\n${text.slice(0, 12000)}\n---\n` : ""}
+書かれている展覧会の情報を取り出してください。書かれていないことは作らず、空文字にしてください。
+- title：展覧会名（書かれているとおり）
+- venue：会場の美術館名
+- start / end：会期を YYYY-MM-DD で。年が書かれていなければ、今日から見て自然な年にする。
+- url：書かれているWebサイトのURL（なければ空文字）
+- summary：どんな展覧会か1〜2文（書かれている内容から）
+- found：展覧会の情報が読み取れたら true、読み取れなければ false`;
 }
