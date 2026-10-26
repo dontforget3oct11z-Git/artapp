@@ -524,10 +524,10 @@ function renderShareBox(joinCode) {
         <div class="small muted" id="shMsg">もう1台のスマホの「設定 → 家族と共有」に出ている招待コードを貼ってください。</div>` : `
         <details class="small"><summary>Firebaseの準備（最初に1回、約10分）</summary><ol class="steps">
           <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebaseコンソール</a>でプロジェクトを作る（Googleアナリティクスはオフで可）</li>
-          <li>「Authentication」→「始める」→「ログイン方法」で「匿名」を有効にする</li>
-          <li>「Firestore Database」→「データベースを作成」（場所は asia-northeast1 東京）</li>
+          <li>「セキュリティ」→「Authentication」→「始める」→「ログイン方法」で「匿名」を有効にする</li>
+          <li>「Database と Storage」→「Firestore」→「データベースを作成」（場所は asia-northeast1 東京、本番環境モード）</li>
           <li>Firestoreの「ルール」に、<a href="${SETUP_URL}" target="_blank" rel="noopener">説明ページ</a>のルールを貼って「公開」</li>
-          <li>プロジェクトの設定（歯車）→「マイアプリ」→ ウェブ（&lt;/&gt;）を登録し、表示された firebaseConfig をコピー</li>
+          <li>「設定」→「全般」→「マイアプリ」→ ウェブ（&lt;/&gt;）を登録し、表示された firebaseConfig をコピー</li>
         </ol></details>
         <div class="field"><label for="shCfg">firebaseConfig を貼り付け</label><textarea id="shCfg" style="min-height:90px" placeholder="const firebaseConfig = { apiKey: ..., projectId: ... };"></textarea></div>
         <div class="field"><label for="shName">あなたの名前（相手に表示）</label><input id="shName" placeholder="例：たけし"></div>
