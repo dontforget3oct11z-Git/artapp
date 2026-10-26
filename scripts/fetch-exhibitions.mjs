@@ -21,7 +21,7 @@ import { createHash } from "node:crypto";
 
 const ROOT = new URL("../", import.meta.url);
 const KEY = process.env.GEMINI_API_KEY || "";
-const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 const ONLY = process.argv.slice(2);
 const UA = "Mozilla/5.0 (compatible; ArtMuseBot/1.0; personal exhibition calendar; +https://github.com/dontforget3oct11z-Git/artapp)";
 // Sites that refuse this bot (HTTP 403) are left alone; their exhibitions can be added by hand in the app.
@@ -118,28 +118,43 @@ function prompt(m, text) {
 ${text}`;
 }
 
+// Two free models, each with its own per-minute limit. Use whichever is free right now;
+// the checks below catch mistakes, so the lighter model is fine.
+const cooldown = new Map(); // model -> time it can be used again
 async function askGemini(m, text) {
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt(m, text) }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0 },
   };
-  let lastErr;
-  for (const model of MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  let lastErr, rateHits = 0;
+  for (let round = 0; round < 8; round++) {
+    const ready = MODELS.filter(x => (cooldown.get(x) || 0) <= Date.now());
+    if (!ready.length) { await sleep(Math.max(1000, Math.min(...MODELS.map(x => cooldown.get(x))) - Date.now())); continue; }
+    const model = ready[0];
+    let res;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": KEY }, body: JSON.stringify(body),
       });
-      if (res.ok) {
-        const j = await res.json();
-        const t = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("");
-        try { return { list: JSON.parse(t).exhibitions || [], model }; } catch { lastErr = new Error("bad JSON from " + model); break; }
-      }
-      const msg = (await res.text()).slice(0, 300);
-      lastErr = new Error(`Gemini ${model} HTTP ${res.status}: ${msg}`);
-      if (res.status === 429) { await sleep(attempt ? 1000 : 30000); continue; } // per-minute limit: wait once, then try the next model
-      if (res.status >= 500) { await sleep(5000); continue; }
-      break;
+    } catch (e) { lastErr = e; await sleep(5000); continue; }
+    if (res.ok) {
+      const j = await res.json();
+      const t = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("");
+      try { return { list: JSON.parse(t).exhibitions || [], model }; } catch { lastErr = new Error("bad JSON from " + model); continue; }
     }
+    const msg = (await res.text()).slice(0, 300);
+    lastErr = new Error(`Gemini ${model} HTTP ${res.status}: ${msg}`);
+    if (res.status === 429) {
+      rateHits++;
+      // a daily limit: stop using this model for the rest of the run
+      const daily = /per.?day|PerDay|daily/i.test(msg);
+      cooldown.set(model, Date.now() + (daily ? 864e5 : 30000));
+      if (MODELS.every(x => (cooldown.get(x) || 0) > Date.now() + 36e5)) break;
+      if (rateHits >= 6) break;
+      continue;
+    }
+    if (res.status >= 500) { await sleep(5000); continue; }
+    break;
   }
   throw lastErr;
 }
@@ -326,7 +341,7 @@ for (const m of queue) {
     report.push(`✗ ${m.id} AI failed: ${e.message.slice(0, 200)}`);
     results.push(...old);
   }
-  await sleep(4500); // stay under the free per-minute limit
+  await sleep(2000); // be gentle with the API
 }
 
 console.log(report.join("\n"));
