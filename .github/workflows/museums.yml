@@ -1,0 +1,35 @@
+# Rebuild the list of museums (Japan + world) from Wikidata. Runs monthly, or by hand.
+name: 美術館リストの更新
+
+on:
+  schedule:
+    - cron: "0 20 1 * *" # the 1st of each month, 05:00 in Japan
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: museums
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Wikidataから美術館を集める
+        run: node scripts/build-museums.mjs
+      - name: 変わっていれば保存する
+        run: |
+          git add data/museums-wikidata.json
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "美術館リストを更新"
+          git pull --rebase origin main
+          git push
