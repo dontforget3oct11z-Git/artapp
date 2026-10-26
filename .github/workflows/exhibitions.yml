@@ -5,6 +5,7 @@ name: 展示情報の更新
 on:
   schedule:
     - cron: "30 19 * * *" # 04:30 in Japan
+    - cron: "30 7 * * *"  # 16:30 in Japan (second round, so all museums are covered sooner)
   workflow_dispatch:
     inputs:
       museums:

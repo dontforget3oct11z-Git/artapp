@@ -93,7 +93,7 @@ Claudeの金額は、作品とラベルの写真を両方送った場合の目�
 
 ## 展示情報の自動取得
 
-リストにある美術館のうち公式サイトがわかる約1,400館を対象に、GitHub Actions が毎朝4時30分ごろ公式サイトを読み、Gemini（無料枠）で展覧会名と会期を取り出して [data/exhibitions.json](data/exhibitions.json) に保存します。
+リストにある美術館のうち公式サイトがわかる約1,400館を対象に、GitHub Actions が毎日2回（4時30分ごろと16時30分ごろ）公式サイトを読み、Gemini（無料枠）で展覧会名と会期を取り出して [data/exhibitions.json](data/exhibitions.json) に保存します。
 
 - 主要32館（[data/museums.json](data/museums.json)）は毎日、そのほかは順番に回ります（展示が見つかった館は3日ごと、見つからなかった館は10日ごと）。1回に使うGeminiは最大220回で、無料枠の上限に達したら続きは翌日に回します。
 - 各サイトの robots.txt を守り、自動取得を断っているサイトは読みません。
