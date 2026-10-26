@@ -4,7 +4,7 @@ import * as ai from "./ai.js";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
-const yen = usd => "¥" + Math.round(usd * ai.USD_JPY).toLocaleString("ja-JP");
+const yen = usd => { const y = usd * ai.USD_JPY; return "¥" + (y < 10 ? y.toFixed(1) : Math.round(y).toLocaleString("ja-JP")); };
 
 /* ================= sample works (only while the collection is empty) ================= */
 function swatch(colors, kind) {
@@ -143,23 +143,25 @@ function status(msg, err, spin) {
   s.innerHTML = msg ? (spin ? '<span class="spinner"></span>' : "") + esc(msg) : "";
 }
 
-$("#btnIdentify").onclick = async () => {
+async function runIdentify(model) {
   const btn = $("#btnIdentify"); btn.disabled = true;
   $("#result").hidden = true;
-  status("作品を調べています…（10〜40秒ほど）", false, true);
+  status(model === ai.PRECISE_MODEL ? "高精度モードで調べ直しています…（20〜60秒ほど）" : "作品を調べています…（10〜40秒ほど）", false, true);
   const before = ai.usage().usd;
+  const used = model || ai.settings.model;
   try {
     const art = shots.art ? await toBlob(shots.art.img, 1568) : null;
     const label = shots.label ? await toBlob(shots.label.img, 1568, .88) : null;
     const museum = $("#inMuseum").value.trim();
-    const data = await ai.identify({ art, label, museum, place: geo?.place });
+    const data = await ai.identify({ art, label, museum, place: geo?.place, model: used });
     const cost = ai.usage().usd - before;
     status("");
-    showResult(normalize(data, museum), cost);
+    showResult(normalize(data, museum), cost, used);
   } catch (e) {
     status(e.message || "識別できませんでした。手入力で保存できます。", true);
   } finally { updateIdentify(); }
-};
+}
+$("#btnIdentify").onclick = () => runIdentify();
 $("#btnManual").onclick = () => showResult(normalize({}, $("#inMuseum").value.trim()));
 $("#btnGoSettings").onclick = () => openSettings();
 
@@ -193,12 +195,17 @@ function readForm(p, base) {
   return w;
 }
 
-function showResult(r, cost) {
+function showResult(r, cost, usedModel) {
   const box = $("#result"); box.hidden = false;
+  const canEscalate = usedModel && usedModel !== ai.PRECISE_MODEL;
+  const unsure = r.confidence && r.confidence !== "high";
   box.innerHTML = `<div class="box">
     <div class="row" style="justify-content:space-between"><h3>${r.title ? esc(r.title) : "作品情報"}</h3>${confHtml(r.confidence)}</div>
     ${r.alternatives.length ? `<div class="small muted">他の候補：${r.alternatives.map(esc).join(" / ")}</div>` : ""}
     ${cost != null ? `<div class="small muted mono">今回のAI利用料 約${yen(cost)}</div>` : ""}
+    ${canEscalate ? `<div class="${unsure ? "status" : ""} row" style="justify-content:space-between">
+      <span class="small${unsure ? "" : " muted"}">${unsure ? "AIの自信が低めです。高精度モード（Opus）で調べ直せます。" : "結果が違うときは、高精度モード（Opus）で調べ直せます。"}<br><span class="muted">1回 約10円</span></span>
+      <button class="btn ${unsure ? "primary" : "ghost"} small" id="btnPrecise">高精度で再識別</button></div>` : ""}
     ${formHtml(r, "new")}
     <div class="row"><button class="btn primary" id="btnSave">コレクションに保存</button><button class="btn ghost" id="btnDiscard">やり直す</button></div>
   </div>`;
@@ -223,6 +230,7 @@ function showResult(r, cost) {
     }
   };
   $("#btnDiscard").onclick = resetScan;
+  if ($("#btnPrecise")) $("#btnPrecise").onclick = () => runIdentify(ai.PRECISE_MODEL);
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function resetScan() {
@@ -469,7 +477,7 @@ function openSettings() {
       <h3>AIのモデル</h3>
       <div class="field"><label for="sModel">識別・質問に使うモデル</label>
         <select id="sModel">${Object.entries(ai.MODELS).map(([id, m]) => `<option value="${id}" ${id === s.model ? "selected" : ""}>${m.name}</option>`).join("")}</select>
-        <span class="help">1回のスキャンの目安：Opus 約8〜10円、Sonnet 約4〜5円、Haiku 約0.3円。精度はOpusが最も高いです。</span></div>
+        <span class="help">1回のスキャンの目安：Haiku 約0.3円、Sonnet 約4〜5円、Opus 約8〜10円。Haikuでも、ラベルを一緒に撮れば作品名・作家は正確に読み取れます。結果に自信がないときは、識別結果の画面から高精度モード（Opus）で調べ直せます。</span></div>
       <label class="check"><input type="checkbox" id="sWeb" ${s.webSearch ? "checked" : ""}><span>Web検索で作品名を確かめる<br><span class="small muted">マイナーな作品の精度が上がります。1回のスキャンにつき5〜10円ほど増え、時間も少し長くなります。</span></span></label>
       <label class="check"><input type="checkbox" id="sGeo" ${settingsGet("geo", "1") === "1" ? "checked" : ""}><span>撮影した場所を記録する<br><span class="small muted">マップに表示するためです。写真に位置情報があればそれを使い、なければその場で撮った時だけ現在地を使います。</span></span></label>
     </div>

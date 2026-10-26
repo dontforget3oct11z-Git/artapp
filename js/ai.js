@@ -6,9 +6,10 @@ import Anthropic from "../vendor/anthropic-sdk.js";
 export const MODELS = {
   "claude-opus-5-5":   { name: "Claude Opus 5.5（最高精度）", inUsd: 4,    outUsd: 20,  fallback: true },
   "claude-sonnet-5-5": { name: "Claude Sonnet 5.5（バランス）", inUsd: 2,  outUsd: 10,  fallback: true },
-  "claude-haiku-5-5":  { name: "Claude Haiku 5.5（最安）",     inUsd: 0.1, outUsd: 0.5, fallback: false },
+  "claude-haiku-5-5":  { name: "Claude Haiku 5.5（最安・初期設定）",     inUsd: 0.1, outUsd: 0.5, fallback: false },
 };
-export const DEFAULT_MODEL = "claude-opus-5-5";
+export const DEFAULT_MODEL = "claude-haiku-5-5";
+export const PRECISE_MODEL = "claude-opus-5-5"; // used for "re-identify with high accuracy"
 const WEB_SEARCH_USD = 10 / 1000; // per search
 export const USD_JPY = 150;       // rough rate for the cost display
 
@@ -172,8 +173,8 @@ const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員です�
 
 写真から確認できない情報を事実のように断定しないでください。特定できない作品（現代作家の作品や個人蔵など）でも、見える情報から推定して埋め、confidence を low にしてください。`;
 
-export async function identify({ art, label, museum, place }) {
-  const model = settings.model;
+export async function identify({ art, label, museum, place, model }) {
+  model = model || settings.model;
   const content = [];
   if (art) content.push(await imageBlock(art));
   if (label) content.push(await imageBlock(label));
