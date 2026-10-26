@@ -1,5 +1,6 @@
 import * as store from "./store.js";
 import * as ai from "./ai.js";
+import { verify, merge } from "./verify.js";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -155,14 +156,20 @@ async function runIdentify(precise) {
     const args = { art, label, museum, place: geo?.place };
     const res = precise ? await ai.identifyPrecise(args) : await ai.identify(args);
     const cost = res.provider === "claude" ? ai.usage().usd - before : 0;
+    const r = normalize(res.data, museum);
+    let v = null;
+    if (r.title && r.artist) {
+      status("Wikipediaで内容を確かめています…", false, true);
+      v = await verify(r);
+    }
     status("");
-    showResult(normalize(res.data, museum), cost, res, res.data?._note);
+    showResult(merge(r, v), cost, res, res.data?._note);
   } catch (e) {
     status(e.message || "識別できませんでした。手入力で保存できます。", true);
   } finally { updateIdentify(); }
 }
 $("#btnIdentify").onclick = () => runIdentify(false);
-$("#btnManual").onclick = () => showResult(normalize({}, $("#inMuseum").value.trim()));
+$("#btnManual").onclick = () => showResult({ ...normalize({}, $("#inMuseum").value.trim()), src: {}, manual: true });
 $("#btnGoSettings").onclick = () => openSettings();
 
 function normalize(d, museum) {
@@ -174,23 +181,40 @@ function normalize(d, museum) {
     museum: museum || s("museum"), description: s("description"), artistNote: s("artistNote"),
     lookFor: arr("lookFor"), labelText: s("labelText"), confidence: s("confidence"),
     alternatives: arr("alternatives").slice(0, 3), tags: arr("tags").slice(0, 8),
+    basis: d.basis && typeof d.basis === "object" ? d.basis : {},
   };
 }
 const CONF = { high: ["high", "確度 高"], medium: ["mid", "確度 中"], low: ["low", "確度 低：内容を確認してください"] };
 const confHtml = c => { const k = CONF[c]; return k ? `<span class="conf ${k[0]}"><i></i>${k[1]}</span>` : ""; };
 
+const SRC = { label: ["label", "ラベル"], wiki: ["wiki", "Wikipedia確認済"], ai: ["ai", "AIの推測"], user: ["user", "手入力"] };
+const srcBadge = k => { const v = SRC[k]; return v ? `<span class="src ${v[0]}">${v[1]}</span>` : ""; };
+function verifyBanner(w) {
+  if (w.manual) return "";
+  if (w.verified) {
+    const link = w.wiki ? `<a href="${esc(w.wiki.url)}" target="_blank" rel="noopener">Wikipedia${w.wiki.lang === "en" ? "（英語）" : ""}「${esc(w.wiki.title)}」</a>` : `<a href="${esc(w.wikidataUrl)}" target="_blank" rel="noopener">Wikidata</a>`;
+    return `<div class="verify ok small">この作品は ${link} で確認できました。「AIの推測」の印がある項目だけ注意してください。</div>`;
+  }
+  return `<div class="verify warn small">Wikipediaでは確認できませんでした。「AIの推測」の印がある項目は間違っている可能性があります。ラベルの写真も撮ると正確になります。</div>`;
+}
 const FIELDS = [["title", "作品名"], ["artist", "作家"], ["year", "制作年"], ["medium", "技法・素材"], ["movement", "流派・様式"],
   ["dimensions", "寸法"], ["museum", "美術館・展覧会"], ["originalTitle", "原題"], ["artistReading", "作家（原語・読み）"]];
 function formHtml(w, p) {
-  return `<div class="grid2">${FIELDS.map(([k, l]) => `<div class="field"><label for="${p}-${k}">${l}</label><input id="${p}-${k}" value="${esc(w[k])}"></div>`).join("")}</div>
+  const src = w.src || {};
+  return `<div class="grid2">${FIELDS.map(([k, l]) => `<div class="field"><label for="${p}-${k}">${l}${srcBadge(src[k])}</label><input id="${p}-${k}" value="${esc(w[k])}"></div>`).join("")}</div>
   <div class="field"><label for="${p}-description">解説</label><textarea id="${p}-description">${esc(w.description)}</textarea></div>
   <div class="field"><label for="${p}-tags">タグ（読点で区切る）</label><input id="${p}-tags" value="${esc((w.tags || []).join("、"))}"></div>
   <div class="field"><label for="${p}-labelText">ラベルの文字</label><textarea id="${p}-labelText" style="min-height:70px">${esc(w.labelText)}</textarea></div>
   <div class="field"><label for="${p}-note">メモ</label><textarea id="${p}-note" style="min-height:60px" placeholder="気づいたこと、感じたこと">${esc(w.note)}</textarea></div>`;
 }
 function readForm(p, base) {
-  const w = { ...base };
-  [...FIELDS.map(f => f[0]), "description", "labelText", "note"].forEach(k => { const el = document.getElementById(p + "-" + k); if (el) w[k] = el.value.trim(); });
+  const w = { ...base, src: { ...(base.src || {}) } };
+  [...FIELDS.map(f => f[0]), "description", "labelText", "note"].forEach(k => {
+    const el = document.getElementById(p + "-" + k); if (!el) return;
+    const v = el.value.trim();
+    if (v !== (base[k] || "") && ["title", "artist", "year", "medium", "dimensions", "museum"].includes(k)) w.src[k] = v ? "user" : "";
+    w[k] = v;
+  });
   const t = document.getElementById(p + "-tags"); if (t) w.tags = t.value.split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean);
   return w;
 }
@@ -204,6 +228,8 @@ function showResult(r, cost, used, note) {
     ${r.alternatives.length ? `<div class="small muted">他の候補：${r.alternatives.map(esc).join(" / ")}</div>` : ""}
     ${used ? `<div class="small muted mono">${used.provider === "claude" ? `今回のAI利用料 約${yen(cost)}` : "今回のAI利用料 0円（Gemini無料枠）"}</div>` : ""}
     ${note ? `<div class="small muted">${esc(note)}</div>` : ""}
+    ${verifyBanner(r)}
+    ${r.wiki?.extract ? `<details class="small"><summary>Wikipediaの説明を読む</summary><div class="prose" style="margin-top:6px">${esc(r.wiki.extract)}</div></details>` : ""}
     ${canEscalate ? `<div class="${unsure ? "status" : ""} row" style="justify-content:space-between">
       <span class="small${unsure ? "" : " muted"}">${unsure ? "AIの自信が低めです。高精度モード（Claude Opus）で調べ直せます。" : "結果が違うときは、高精度モード（Claude Opus）で調べ直せます。"}<br><span class="muted">有料：1回 約10円</span></span>
       <button class="btn ${unsure ? "primary" : "ghost"} small" id="btnPrecise">高精度で再識別</button></div>` : ""}
@@ -221,7 +247,7 @@ function showResult(r, cost, used, note) {
       w.visited = $("#inDate").value || today();
       w.createdAt = Date.now();
       if (geo) { w.lat = geo.lat; w.lng = geo.lng; w.place = geo.place || ""; }
-      delete w.alternatives;
+      delete w.alternatives; delete w.manual;
       await store.put(w);
       store.persist();
       toast("保存しました");
@@ -353,7 +379,9 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet()
 
 function openDetail(id) {
   const w = findWork(id); if (!w) return;
-  const meta = [["制作年", w.year], ["技法", w.medium], ["寸法", w.dimensions], ["様式", w.movement], ["所蔵・展示", w.museum],
+  const sr = w.src || {};
+  const meta = [["制作年", w.year, sr.year], ["技法", w.medium, sr.medium], ["寸法", w.dimensions, sr.dimensions], ["様式", w.movement], ["展示場所", w.museum, sr.museum],
+    ["所蔵", w.collection && w.collection !== w.museum ? w.collection : "", "wiki"],
     ["訪問日", (w.visited || "").replace(/-/g, ".")], ["原題", w.originalTitle]].filter(x => x[1]);
   openSheet(`<div class="bar"><button class="btn ghost" id="dClose">← 戻る</button>
       <div class="row">${w.sample ? "" : `<button class="btn ghost small" id="dFav" aria-pressed="${!!w.fav}">${w.fav ? "♥ お気に入り" : "♡ お気に入り"}</button><button class="btn ghost small" id="dShare">共有</button><button class="btn ghost small" id="dEdit">編集</button>`}</div></div>
@@ -361,14 +389,16 @@ function openDetail(id) {
       <div class="frame">${imageOf(w) ? `<img src="${imageOf(w)}" alt="${esc(w.title)}">` : ""}</div>
       <div class="plaque">
         ${w.sample ? `<span class="small muted">サンプル</span>` : ""}
-        <div class="artist">${esc(w.artist || "作家不明")}${w.artistReading ? ` <span class="small muted">${esc(w.artistReading)}</span>` : ""}</div>
-        <div class="title">${esc(w.title || "無題")}</div>
+        <div class="artist">${esc(w.artist || "作家不明")}${w.artistReading ? ` <span class="small muted">${esc(w.artistReading)}</span>` : ""}${srcBadge(sr.artist)}</div>
+        <div class="title">${esc(w.title || "無題")}${srcBadge(sr.title)}</div>
         ${confHtml(w.confidence)}
-        <dl>${meta.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+        <dl>${meta.map(([k, v, so]) => `<dt>${k}</dt><dd>${esc(v)}${srcBadge(so)}</dd>`).join("")}</dl>
+        ${w.sample ? "" : verifyBanner(w)}
         ${(w.tags || []).length ? `<div class="chips" style="flex-wrap:wrap">${w.tags.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>
     </div>
-    ${w.description ? `<div class="box"><h3>解説</h3><div class="prose">${esc(w.description)}</div>${w.artistNote ? `<div class="prose muted small">${esc(w.artistNote)}</div>` : ""}</div>` : ""}
+    ${w.wiki?.extract ? `<div class="box"><h3>Wikipediaより</h3><div class="prose">${esc(w.wiki.extract)}</div><a class="small" href="${esc(w.wiki.url)}" target="_blank" rel="noopener">Wikipediaで続きを読む</a></div>` : ""}
+    ${w.description ? `<div class="box"><h3>${w.sample ? "解説" : "AIによる解説"}</h3><div class="prose">${esc(w.description)}</div>${w.artistNote ? `<div class="prose muted small">${esc(w.artistNote)}</div>` : ""}</div>` : ""}
     ${(w.lookFor || []).length ? `<div class="box"><h3>実物で見てほしいところ</h3><ul style="margin:0;padding-left:1.2em">${w.lookFor.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
     ${w.note ? `<div class="box"><h3>メモ</h3><div class="prose">${esc(w.note)}</div></div>` : ""}
     ${w.labelText || w.labelImage ? `<div class="box"><h3>ラベル</h3>${w.labelImage ? `<img class="label-photo" src="${urlFor(w.labelImage)}" alt="ラベルの写真">` : ""}${w.labelText ? `<pre>${esc(w.labelText)}</pre>` : ""}</div>` : ""}

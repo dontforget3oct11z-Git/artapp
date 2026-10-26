@@ -49,7 +49,7 @@ export const WORK_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["title", "originalTitle", "artist", "artistReading", "year", "medium", "dimensions", "movement", "museum",
-    "description", "artistNote", "lookFor", "labelText", "confidence", "alternatives", "tags"],
+    "description", "artistNote", "lookFor", "labelText", "confidence", "alternatives", "tags", "basis"],
   properties: {
     title: { type: "string" },
     originalTitle: { type: "string" },
@@ -67,25 +67,41 @@ export const WORK_SCHEMA = {
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     alternatives: { type: "array", items: { type: "string" } },
     tags: { type: "array", items: { type: "string" } },
+    basis: {
+      type: "object", additionalProperties: false,
+      required: ["title", "artist", "year", "medium", "dimensions", "museum"],
+      properties: Object.fromEntries(["title", "artist", "year", "medium", "dimensions", "museum"]
+        .map(k => [k, { type: "string", enum: ["label", "knowledge", "none"] }])),
+    },
   },
 };
 
+// Fields whose source we track and show to the user.
+export const SOURCED_FIELDS = ["title", "artist", "year", "medium", "dimensions", "museum"];
+
 export const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員です。来館者が撮った写真から作品を特定し、日本語で作品カードを作ります。
+いちばん大切なのは、事実でないことを書かないことです。確かでない項目は空文字にしてください。空欄は問題ありません。
+
+情報の優先順位：
+1. ラベル（キャプション）の写真に書かれた文字。書かれている項目は必ずラベルの内容を使う。
+2. 撮影場所として伝えられた美術館・展覧会の名前。
+3. 写真の絵柄から作品を確実に特定できた場合だけ、あなたの知識。
 
 各項目の書き方：
 - title: 日本語の定訳があれば日本語の作品名。原題は originalTitle に（同じなら空文字）。
 - artist: 作家名の日本語表記。artistReading: 原語表記（例：Claude Monet）。日本人作家なら読み仮名。
-- year / medium / dimensions / movement: わかる範囲で。不明なら空文字。
-- museum: 所蔵館。ラベルや撮影場所の情報を優先。
-- description: 実物の前で読んで楽しい見どころを3〜5文。
-- artistNote: 作家について1〜2文。
-- lookFor: 実物で注目してほしい細部を2〜3個、各1文。
-- labelText: ラベル写真があれば、その文字を原文のまま改行も保って書き起こす。なければ空文字。
-- confidence: 特定の確からしさ。ラベルで確認できたら high、絵柄だけで有名作と一致すれば high か medium、推測なら low。
+- year / medium / dimensions / movement: ラベルにあればそれを使う。ラベルになければ、作品を確実に特定できた場合だけ記入し、それ以外は空文字。
+- museum: ラベルの館名か、伝えられた撮影場所。なければ、確実な場合だけ所蔵館。
+- description: 作品を特定できた場合は、実物の前で読んで楽しい見どころを3〜5文。特定できない場合は、写真に見えていること（主題・色・構図・技法の特徴）だけを書き、作品名や来歴を作らない。
+- artistNote: 作家が確実にわかる場合だけ1〜2文。それ以外は空文字。
+- lookFor: 写真に実際に見えている細部のうち、実物で注目してほしいものを2〜3個、各1文。
+- labelText: ラベル写真があれば、その文字を原文のまま改行も保って書き起こす。読めない文字は〔?〕とする。なければ空文字。
+- confidence: 特定の確からしさ。ラベルで確認できたら high。ラベルがなく、絵柄が有名作と明らかに一致するなら medium。それ以外は low。
 - alternatives: confidence が high でない時の他の候補「作品名 / 作家」を最大3件。high なら空配列。
-- tags: 主題・モチーフ・色などの短いタグを3〜6個。
+- tags: 写真に見えている主題・モチーフ・色などの短いタグを3〜6個。
+- basis: title, artist, year, medium, dimensions, museum のそれぞれについて、ラベルや伝えられた撮影場所から取ったら label、絵柄から作品を特定してあなたの知識で書いたら knowledge、空文字なら none。
 
-写真から確認できない情報を事実のように断定しないでください。特定できない作品（現代作家の作品や個人蔵など）でも、見える情報から推定して埋め、confidence を low にしてください。`;
+作品を特定できない場合（現代作家の作品、個人蔵、写真が不鮮明など）は、title と artist を空文字にして confidence を low にし、候補があれば alternatives に入れてください。`;
 
 export function identifyText({ hasArt, hasLabel, museum, place }) {
   const what = hasArt && hasLabel ? "1枚目は作品、2枚目はその作品の解説ラベル（キャプション）の写真です。"
