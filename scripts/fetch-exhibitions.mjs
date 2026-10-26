@@ -9,7 +9,7 @@
 // Without GEMINI_API_KEY it only checks that each page can be downloaded.
 //
 // Usage: GEMINI_API_KEY=... node scripts/fetch-exhibitions.mjs [museumId ...]
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 const ROOT = new URL("../", import.meta.url);
@@ -17,6 +17,8 @@ const KEY = process.env.GEMINI_API_KEY || "";
 const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
 const ONLY = process.argv.slice(2);
 const UA = "Mozilla/5.0 (compatible; ArtMuseBot/1.0; personal exhibition calendar; +https://github.com/dontforget3oct11z-Git/artapp)";
+// Sites that refuse this bot (HTTP 403) are left alone; their exhibitions can be added by hand in the app.
+const DEBUG = process.env.DEBUG_DUMP === "1";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const jstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
@@ -177,16 +179,27 @@ const results = [], errors = [], report = [];
 for (const m of museums) {
   if (ONLY.length && !ONLY.includes(m.id)) continue;
   const old = (prev.exhibitions || []).filter(e => e.museumId === m.id && (!e.end || e.end >= TODAY));
-  let page;
-  try { page = await download(m.exUrl); }
-  catch (e) {
-    errors.push({ museumId: m.id, error: "download: " + e.message });
-    report.push(`✗ ${m.id} download failed: ${e.message}`);
+  // The exhibition page first; the top page too when that fails or has little text.
+  let text = "", pageUrl = "", fails = [];
+  for (const u of [...new Set([m.exUrl, m.url].filter(Boolean))]) {
+    if (text.length >= 1500) break;
+    try {
+      const page = await download(u);
+      const t = htmlToText(page.html, page.finalUrl);
+      if (DEBUG) { await mkdir(new URL("debug/", ROOT), { recursive: true }); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.html`, ROOT), page.html); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.txt`, ROOT), t); }
+      text += (text ? "\n\n--- 別のページ ---\n" : "") + t;
+      pageUrl ||= page.finalUrl;
+    } catch (e) { fails.push(`${u}: ${e.message}`); }
+  }
+  if (!text) {
+    errors.push({ museumId: m.id, error: "download: " + fails.join(" / ") });
+    report.push(`✗ ${m.id} download failed: ${fails.join(" / ")}`);
     results.push(...old); // keep what we had
     continue;
   }
-  const text = htmlToText(page.html, page.finalUrl).slice(0, 40000);
-  if (!KEY) { report.push(`✓ ${m.id} ${page.finalUrl} (${text.length} chars)`); continue; }
+  text = text.slice(0, 40000);
+  const page = { finalUrl: pageUrl };
+  if (!KEY) { report.push(`✓ ${m.id} ${page.finalUrl} (${text.length} chars)${fails.length ? " [failed: " + fails.join(" / ") + "]" : ""}`); continue; }
   try {
     const { list, model } = await askGemini(m, text);
     const kept = [], dropped = [];

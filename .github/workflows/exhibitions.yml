@@ -11,6 +11,10 @@ on:
         description: "美術館ID（空欄ならすべて。例: nmwa tnm）"
         required: false
         default: ""
+      debug:
+        description: "ページの中身を保存して確認する（開発用）"
+        required: false
+        default: "0"
 
 permissions:
   contents: write
@@ -31,7 +35,15 @@ jobs:
       - name: 展示情報を集める
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEBUG_DUMP: ${{ github.event.inputs.debug }}
         run: node scripts/fetch-exhibitions.mjs ${{ github.event.inputs.museums }}
+      - name: 確認用にページの中身を残す
+        if: ${{ github.event.inputs.debug == '1' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages
+          path: debug/
+          retention-days: 3
       - name: 変わっていれば保存する
         run: |
           if git diff --quiet -- data/exhibitions.json; then echo "変更なし"; exit 0; fi

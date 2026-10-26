@@ -120,7 +120,7 @@
    "lat": 35.6623,
    "lng": 139.7173,
    "url": "https://www.nezu-muse.or.jp/",
-   "exUrl": "https://www.nezu-muse.or.jp/jp/exhibition/"
+   "exUrl": "https://www.nezu-muse.or.jp/"
   },
   {
    "id": "momat",
@@ -260,8 +260,8 @@
    "city": "名古屋市",
    "lat": 35.172,
    "lng": 136.9086,
-   "url": "https://www-art.aac.pref.aichi.jp/",
-   "exUrl": "https://www-art.aac.pref.aichi.jp/exhibition/"
+   "url": "https://apmoa.museum/",
+   "exUrl": "https://apmoa.museum/exhibition/"
   },
   {
    "id": "kanazawa21",
@@ -344,7 +344,7 @@
    "lat": 34.6915,
    "lng": 135.493,
    "url": "https://nakka-art.jp/",
-   "exUrl": "https://nakka-art.jp/exhibition/"
+   "exUrl": "https://nakka-art.jp/"
   },
   {
    "id": "ohara",
