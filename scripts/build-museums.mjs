@@ -6,7 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const ROOT = new URL("../", import.meta.url);
 const UA = "ArtMuseBot/1.0 (personal museum map; https://github.com/dontforget3oct11z-Git/artapp)";
-const WORLD_MIN_SITELINKS = Number(process.env.WORLD_MIN_SITELINKS || 30);
+const WORLD_MIN_SITELINKS = Number(process.env.WORLD_MIN_SITELINKS || 18);
 
 async function sparql(q) {
   for (let i = 0; i < 3; i++) {
