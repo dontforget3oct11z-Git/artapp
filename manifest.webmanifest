@@ -1,6 +1,6 @@
 {
-  "name": "ArtScan",
-  "short_name": "ArtScan",
+  "name": "ArtMuse",
+  "short_name": "ArtMuse",
   "description": "美術館で撮った作品を、AIで作品名と解説つきのコレクションに。",
   "lang": "ja",
   "start_url": "./#collection",

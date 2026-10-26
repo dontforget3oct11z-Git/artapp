@@ -541,7 +541,7 @@ function openSettings() {
     </div>
     <div class="box">
       <h3>このアプリについて</h3>
-      <div class="small muted">ArtScan（ArtScan AI LLC）の機能を参考に作った個人用アプリです。APIキーはこの端末のブラウザの中だけに保存され、AIへの問い合わせ以外には送られません。地図データ © OpenStreetMap contributors。</div>
+      <div class="small muted">ArtScan（ArtScan AI LLC）の機能を参考に作った個人用アプリです。名前は museum（美術館）と muse（ひらめきの女神）から。APIキーはこの端末のブラウザの中だけに保存され、AIへの問い合わせ以外には送られません。地図データ © OpenStreetMap contributors。</div>
     </div>`);
   $("#sClose").onclick = () => closeSheet();
   $("#sheetIn").querySelectorAll("button[data-act]").forEach(b => b.onclick = async () => {
@@ -562,7 +562,7 @@ function openSettings() {
     try {
       const json = await store.exportJson();
       const blob = new Blob([json], { type: "application/json" });
-      const name = `artscan-backup-${today()}.json`;
+      const name = `artmuse-backup-${today()}.json`;
       const file = new File([blob], name, { type: "application/json" });
       if (navigator.canShare?.({ files: [file] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) await navigator.share({ files: [file], title: name });
       else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }

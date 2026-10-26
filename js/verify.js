@@ -5,7 +5,7 @@ const WD = "https://www.wikidata.org/w/api.php";
 const UNITS = { Q174728: "cm", Q11573: "m", Q174789: "mm", Q218593: "in" };
 
 async function getJson(url, signal) {
-  const r = await fetch(url, { signal, headers: { "Api-User-Agent": "ArtScan-PWA/1.0 (personal use)" } });
+  const r = await fetch(url, { signal, headers: { "Api-User-Agent": "ArtMuse-PWA/1.0 (personal use)" } });
   if (!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }

@@ -68,7 +68,7 @@ export async function exportJson() {
 
 export async function importJson(text) {
   const data = JSON.parse(text);
-  if (data?.app !== "artscan" || !Array.isArray(data.works)) throw new Error("ArtScanのバックアップファイルではありません");
+  if (data?.app !== "artscan" || !Array.isArray(data.works)) throw new Error("ArtMuseのバックアップファイルではありません");
   let n = 0;
   for (const w of data.works) {
     if (!w?.id) continue;

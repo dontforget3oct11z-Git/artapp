@@ -1,7 +1,7 @@
-# ArtScan
+# ArtMuse
 
 美術館で撮った作品の写真から、AIが作品名・作家・解説を調べてコレクションに残すWebアプリ（PWA）です。
-App Storeの「ArtScan: Museum Photos」の機能を参考にしています。
+App Storeの「ArtScan: Museum Photos」の機能を参考にしています。名前は museum（美術館）と muse（ひらめきの女神）から。
 
 サーバーはありません。AIへの問い合わせは、スマホから直接行います。
 
