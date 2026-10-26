@@ -186,6 +186,7 @@ for (const m of museums) {
     try {
       const page = await download(u);
       const t = htmlToText(page.html, page.finalUrl);
+      if (DEBUG) console.log(`\n===== ${m.id} ${page.finalUrl} html=${page.html.length} text=${t.length}\n${page.html.replace(/\s+/g, " ").slice(0, 1200)}\n----- text\n${t.slice(0, 600)}`);
       if (DEBUG) { await mkdir(new URL("debug/", ROOT), { recursive: true }); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.html`, ROOT), page.html); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.txt`, ROOT), t); }
       text += (text ? "\n\n--- 別のページ ---\n" : "") + t;
       pageUrl ||= page.finalUrl;
