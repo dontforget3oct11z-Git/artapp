@@ -29,7 +29,14 @@ const qid = u => u.split("/").pop();
 // Art museums (and subclasses) in Japan, with the prefecture.
 const JAPAN = `
 SELECT ?m ?mLabel ?en ?coord ?prefLabel ?cityLabel ?site ?sl WHERE {
-  ?m wdt:P31/wdt:P279* wd:Q207694 ; wdt:P17 wd:Q17 ; wdt:P625 ?coord .
+  {
+    ?m wdt:P31/wdt:P279* wd:Q207694 ; wdt:P17 wd:Q17 ; wdt:P625 ?coord .
+  } UNION {
+    # many Japanese art museums are only tagged as "museum": also take items named 〜美術館
+    ?m wdt:P17 wd:Q17 ; wdt:P625 ?coord ; rdfs:label ?ja .
+    FILTER(LANG(?ja) = "ja" && CONTAINS(?ja, "美術館"))
+    ?m wdt:P31 ?t . FILTER(?t NOT IN (wd:Q4167410, wd:Q13406463))
+  }
   FILTER NOT EXISTS { ?m wdt:P576 [] }
   FILTER NOT EXISTS { ?m wdt:P3999 [] }
   OPTIONAL { ?m wdt:P131* ?pref . ?pref wdt:P31 wd:Q50337 . }
