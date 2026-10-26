@@ -93,10 +93,13 @@ Claudeの金額は、作品とラベルの写真を両方送った場合の目�
 
 ## 展示情報の自動取得
 
-[data/museums.json](data/museums.json) の美術館（主要32館）の公式サイトの展覧会ページを、GitHub Actions が毎朝4時30分ごろに読み、Gemini（無料枠）で展覧会名と会期を取り出して [data/exhibitions.json](data/exhibitions.json) に保存します。
+リストにある美術館のうち公式サイトがわかる約1,400館を対象に、GitHub Actions が毎朝4時30分ごろ公式サイトを読み、Gemini（無料枠）で展覧会名と会期を取り出して [data/exhibitions.json](data/exhibitions.json) に保存します。
+
+- 主要32館（[data/museums.json](data/museums.json)）は毎日、そのほかは順番に回ります（展示が見つかった館は3日ごと、見つからなかった館は10日ごと）。1回に使うGeminiは最大220回で、無料枠の上限に達したら続きは翌日に回します。
+- 各サイトの robots.txt を守り、自動取得を断っているサイトは読みません。
 
 - AIの作り話を防ぐため、**展覧会名と会期の日付がそのページに実際に書かれているものだけ**を残します。
-- 動かすには、リポジトリの Settings → Secrets and variables → Actions →「New repository secret」で、名前 `GEMINI_API_KEY`、値にGeminiのAPIキーを登録します（アプリで使うものと同じキーで大丈夫です。1日32回ほど使います）。
+- 動かすには、リポジトリの Settings → Secrets and variables → Actions →「New repository secret」で、名前 `GEMINI_API_KEY`、値にGeminiのAPIキーを登録します（アプリで使うものと同じキーで大丈夫です。1日最大220回使います）。
 - Actions タブの「展示情報の更新」→「Run workflow」で、すぐに実行することもできます。
 - 美術館を増やすときは data/museums.json に追加します（exUrl に公式サイトの展覧会一覧ページ）。
 

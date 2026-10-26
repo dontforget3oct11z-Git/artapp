@@ -8,7 +8,8 @@ let month = today().slice(0, 7);
 let day = "";            // selected day
 let filter = "mine";     // mine | want | all
 let pref = "";
-let museumOnly = "";     // set from a museum's "開催中の展示" button
+let museumOnly = "";
+const expanded = new Set();     // set from a museum's "開催中の展示" button
 
 const KIND = { special: "特別展", collection: "コレクション展", other: "展示" };
 
@@ -70,7 +71,12 @@ export function render() {
   const soon = open.filter(e => e.end && daysBetween(t, e.end) <= 14);
   const now = open.filter(e => !soon.includes(e));
   const next = list.filter(e => e.start && e.start > t && e.start <= addDays(t, 120)).sort((a, b) => a.start.localeCompare(b.start));
-  const section = (title, arr, note) => arr.length ? `<h3>${title}<span class="small muted"> ${arr.length}件</span></h3>${note || ""}${arr.map(card).join("")}` : "";
+  const section = (title, arr, note) => {
+    if (!arr.length) return "";
+    const cap = expanded.has(title) ? arr.length : 40;
+    return `<h3>${title}<span class="small muted"> ${arr.length}件</span></h3>${note || ""}${arr.slice(0, cap).map(card).join("")}` +
+      (arr.length > cap ? `<button class="btn ghost" data-more="${title}">残り${arr.length - cap}件を表示</button>` : "");
+  };
   const html = section("まもなく終了", soon) + section("開催中", now) + section("これから", next);
   $("#calList").innerHTML = html || emptyHtml();
   $("#calInfo").innerHTML = infoHtml();
@@ -84,7 +90,7 @@ function emptyHtml() {
 }
 function infoHtml() {
   const up = P.feedUpdated ? new Date(P.feedUpdated) : null;
-  return `展示情報は、主要な美術館の公式サイトから毎朝自動で集めています${up ? `（最終更新 ${up.getMonth() + 1}/${up.getDate()} ${String(up.getHours()).padStart(2, "0")}:${String(up.getMinutes()).padStart(2, "0")}）` : "（まだ集めていません）"}。会期は変わることがあるので、出かける前に公式ページで確認してください。`;
+  return `展示情報は、各美術館の公式サイトから毎朝自動で集めています${up ? `（最終更新 ${up.getMonth() + 1}/${up.getDate()} ${String(up.getHours()).padStart(2, "0")}:${String(up.getMinutes()).padStart(2, "0")}）` : "（まだ集めていません）"}。会期は変わることがあるので、出かける前に公式ページで確認してください。`;
 }
 
 function remain(e) {
@@ -127,6 +133,7 @@ function renderDay(ds, list, works) {
 
 async function onListClick(e) {
   if (e.target.closest("#calDayClose")) { day = ""; render(); return; }
+  const more = e.target.closest("[data-more]"); if (more) { expanded.add(more.dataset.more); render(); return; }
   const w = e.target.closest("[data-id]"); if (w) { app.openDetail(w.dataset.id); return; }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const id = b.closest("[data-ex]").dataset.ex;

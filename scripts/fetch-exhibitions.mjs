@@ -1,12 +1,19 @@
-// Collects current and upcoming exhibitions from each museum's official exhibition page
+// Collects current and upcoming exhibitions from museums' official websites
 // and writes data/exhibitions.json. Runs every day on GitHub Actions (.github/workflows/exhibitions.yml).
 //
-// Steps for each museum in data/museums.json:
-//   1. Download its exhibition page (exUrl) and turn the HTML into plain text, keeping link URLs.
-//   2. Ask Gemini (free tier) to list the exhibitions written on that page as JSON.
-//   3. Keep only exhibitions whose title really appears in the page text and whose dates make sense.
+// Which museums: every museum with a website, from data/museums.json (hand-made, checked every day)
+// and data/museums-wikidata.json (about 1,400 sites, checked in turns so the free Gemini quota lasts:
+// museums that had exhibitions every 3 days, others every 10 days, failing sites every 30 days).
+//
+// Steps for each museum:
+//   1. Respect robots.txt. Download the exhibition page (or the top page, and follow its
+//      "展覧会 / Exhibitions" link) and turn the HTML into plain text, keeping link URLs.
+//   2. Skip pages with no dates on them (nothing to read, saves the AI quota).
+//   3. Ask Gemini (free tier) to list the exhibitions written on the page as JSON.
+//   4. Keep only exhibitions whose title and dates are really written on the page.
 //      This drops anything the AI made up.
-// Without GEMINI_API_KEY it only checks that each page can be downloaded.
+// Progress is kept in data/exhibitions-state.json.
+// Without GEMINI_API_KEY it only checks that the pages can be downloaded.
 //
 // Usage: GEMINI_API_KEY=... node scripts/fetch-exhibitions.mjs [museumId ...]
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -19,6 +26,9 @@ const ONLY = process.argv.slice(2);
 const UA = "Mozilla/5.0 (compatible; ArtMuseBot/1.0; personal exhibition calendar; +https://github.com/dontforget3oct11z-Git/artapp)";
 // Sites that refuse this bot (HTTP 403) are left alone; their exhibitions can be added by hand in the app.
 const DEBUG = process.env.DEBUG_DUMP === "1";
+const MAX_AI = Number(process.env.MAX_AI || 220);         // Gemini calls per run
+const MAX_MUSEUMS = Number(process.env.MAX_MUSEUMS || 400); // sites visited per run
+const MAX_MINUTES = Number(process.env.MAX_MINUTES || 50);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const jstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
@@ -89,7 +99,7 @@ const SCHEMA = {
 };
 
 function prompt(m, text) {
-  return `今日は${TODAY}です。次は「${m.name}」（${m.pref}${m.city}）の公式サイトの展覧会ページから取り出した文章です。［リンク URL ］はリンク先です。
+  return `今日は${TODAY}です。次は「${m.name}」（${[m.country && m.country !== "日本" ? m.country : "", m.pref, m.city].filter(Boolean).join(" ")}）の公式サイトの展覧会ページから取り出した文章です。［リンク URL ］はリンク先です。
 
 このページに書かれている展覧会のうち、会期の終わりが今日以降のもの（開催中と開催予定）をすべて挙げてください。
 
@@ -152,10 +162,9 @@ function check(m, e, pageText, pageUrl) {
   if (end && end < TODAY) return "already ended";
   if (start && start > addDays(TODAY, 550)) return "too far ahead";
   // The month and day of each date should be written on the page in some form.
+  const pt = pageText.normalize("NFKC");
   for (const d of [start, end].filter(Boolean)) {
-    const [, mo, da] = d.split("-").map(Number);
-    const re = new RegExp(`(^|\\D)0?${mo}\\s*[月/.．／]\\s*0?${da}(\\D|$)`);
-    if (!re.test(pageText.normalize("NFKC"))) return "date not on page: " + d;
+    if (!dateOnPage(pt, d)) return "date not on page: " + d;
   }
   let url = "";
   try { if (e.url) { const u = new URL(e.url, pageUrl); if (/^https?:$/.test(u.protocol)) url = u.href; } } catch {}
@@ -163,55 +172,157 @@ function check(m, e, pageText, pageUrl) {
   return {
     id: m.id + "-" + createHash("sha1").update(nt).digest("hex").slice(0, 10),
     museumId: m.id, title, start, end,
-    url: url || m.exUrl, kind: ["special", "collection", "other"].includes(e.kind) ? e.kind : "other",
+    url: url || pageUrl, kind: ["special", "collection", "other"].includes(e.kind) ? e.kind : "other",
     summary: String(e.summary || "").trim().slice(0, 300), venue: String(e.venue || "").trim().slice(0, 80),
     source: pageUrl,
   };
 }
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTHS_FR = ["janv", "f[ée]v", "mars", "avr", "mai", "juin", "juil", "ao[uû]t", "sept", "oct", "nov", "d[ée]c"];
+const MONTHS_DE = ["jan", "feb", "m[äa]r", "apr", "mai", "jun", "jul", "aug", "sep", "okt", "nov", "dez"];
+const MONTHS_IT = ["genn", "febb", "marz", "apr", "magg", "giugn", "lugl", "agost", "sett", "ott", "nov", "dic"];
+const MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+// Is this date written on the page? 10月7日, 10/7, 10.7, 2026-10-07, Oct 7, 7 October, 7.10., 7 ottobre …
+function dateOnPage(pt, d) {
+  const [y, mo, da] = d.split("-").map(Number);
+  const low = pt.toLowerCase();
+  const tests = [
+    `(^|\\D)0?${mo}\\s*[月/.．／-]\\s*0?${da}(\\D|$)`,
+    `(^|\\D)0?${da}\\s*[./]\\s*0?${mo}(\\D|$)`,
+  ];
+  for (const names of [MONTHS, MONTHS_FR, MONTHS_DE, MONTHS_IT, MONTHS_ES]) {
+    const n = names[mo - 1];
+    tests.push(`${n}[a-zéûäè]*\\.?\\s*0?${da}(\\D|$)`, `(^|\\D)0?${da}(st|nd|rd|th|er|\\.)?\\s*(de\\s+)?${n}`);
+  }
+  return tests.some(t => new RegExp(t, "i").test(low)) || low.includes(`${y}${String(mo).padStart(2, "0")}${String(da).padStart(2, "0")}`);
+}
+const hasDates = t => /\d{1,2}\s*[月/.]\s*\d{1,2}|20\d\d|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i.test(t);
+
+// ---------- robots.txt ----------
+const robotsCache = new Map();
+async function allowed(url) {
+  const u = new URL(url);
+  if (!robotsCache.has(u.origin)) {
+    let rules = [];
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 10000);
+      const r = await fetch(u.origin + "/robots.txt", { headers: { "User-Agent": UA }, signal: ctl.signal });
+      clearTimeout(t);
+      if (r.ok) rules = parseRobots(await r.text());
+    } catch {}
+    robotsCache.set(u.origin, rules);
+  }
+  const path = u.pathname + u.search;
+  let best = null;
+  for (const r of robotsCache.get(u.origin)) if (r.path && path.startsWith(r.path) && (!best || r.path.length > best.path.length)) best = r;
+  return !best || best.allow;
+}
+function parseRobots(txt) {
+  const groups = []; let cur = null, lastWasAgent = false;
+  for (const raw of txt.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, "").trim(); if (!line) continue;
+    const [k, ...rest] = line.split(":"); const key = k.trim().toLowerCase(), val = rest.join(":").trim();
+    if (key === "user-agent") { if (!lastWasAgent) { cur = { agents: [], rules: [] }; groups.push(cur); } cur.agents.push(val.toLowerCase()); lastWasAgent = true; continue; }
+    lastWasAgent = false;
+    if (cur && (key === "allow" || key === "disallow")) cur.rules.push({ allow: key === "allow", path: val.replace(/\*.*$/, "") });
+  }
+  const mine = groups.find(g => g.agents.some(a => a && "artmusebot".includes(a.replace(/\/.*/, "")) && a !== "*"));
+  return (mine || groups.find(g => g.agents.includes("*")))?.rules || [];
+}
+
+// On a top page, the link to the exhibitions list.
+function findExhibitionLink(html, base) {
+  const links = [];
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    let href; try { href = new URL(decode(m[1]), base); } catch { continue; }
+    if (href.origin !== new URL(base).origin) continue;
+    const txt = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const score = /展覧会|企画展|展示案内|展示情報|特別展|exhibitions?\b|what'?s on|ausstellung|expositions?|mostre|exposiciones/i.test(txt) ? 2
+      : /exhibit|tenrankai|exhibition|tenji|ausstellung|exposition|mostre/i.test(href.pathname) ? 1 : 0;
+    if (score && !/past|archive|過去|終了|kako/i.test(txt + href.pathname)) links.push({ url: href.href, score, len: txt.length });
+  }
+  links.sort((a, b) => b.score - a.score || a.len - b.len);
+  return links[0]?.url || "";
+}
+
 function addDays(d, n) { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
 
 // ---------- main ----------
-const { museums } = JSON.parse(await readFile(new URL("data/museums.json", ROOT), "utf8"));
+const started = Date.now();
+const curated = JSON.parse(await readFile(new URL("data/museums.json", ROOT), "utf8")).museums.map(m => ({ ...m, curated: true }));
+let wd = [];
+try { wd = JSON.parse(await readFile(new URL("data/museums-wikidata.json", ROOT), "utf8")).museums.filter(m => m.url); } catch {}
 let prev = { exhibitions: [] };
 try { prev = JSON.parse(await readFile(new URL("data/exhibitions.json", ROOT), "utf8")); } catch {}
+let state = {};
+try { state = JSON.parse(await readFile(new URL("data/exhibitions-state.json", ROOT), "utf8")); } catch {}
 
-const results = [], errors = [], report = [];
-for (const m of museums) {
-  if (ONLY.length && !ONLY.includes(m.id)) continue;
+// What to visit this run: chosen ids, else the hand-made list + the Wikidata sites that are due.
+const daysSince = d => d ? (Date.parse(TODAY) - Date.parse(d)) / 864e5 : 9999;
+const due = m => { const st = state[m.id] || {}; const every = st.fails >= 2 ? 30 : st.found ? 3 : 10; return daysSince(st.checked) >= every; };
+let queue = ONLY.length ? [...curated, ...wd].filter(m => ONLY.includes(m.id))
+  : [...curated, ...wd.filter(due).sort((a, b) => daysSince((state[b.id] || {}).checked) - daysSince((state[a.id] || {}).checked) || (b.rank || 0) - (a.rank || 0))];
+queue = queue.slice(0, MAX_MUSEUMS);
+console.log(`Visiting ${queue.length} museums (${curated.length} hand-made, ${wd.length} from Wikidata, ${wd.filter(due).length} due).`);
+
+const done = new Set(), results = [], errors = [], report = [];
+let aiCalls = 0, quotaOut = false;
+for (const m of queue) {
+  if (Date.now() - started > MAX_MINUTES * 60e3) { report.push("… time limit reached, the rest next time"); break; }
+  if (quotaOut) break;
+  const st = (state[m.id] ||= {});
   const old = (prev.exhibitions || []).filter(e => e.museumId === m.id && (!e.end || e.end >= TODAY));
-  // The exhibition page first; the top page too when that fails or has little text.
+  // Pages to read: the known exhibition page, else the top page and its exhibitions link.
   let text = "", pageUrl = "", fails = [];
-  for (const u of [...new Set([m.exUrl, m.url].filter(Boolean))]) {
-    if (text.length >= 1500) break;
+  const tried = new Set();
+  const read = async u => {
+    if (!u || tried.has(u) || text.length >= 1500) return null;
+    tried.add(u);
     try {
+      if (!(await allowed(u))) { fails.push(`${u}: robots.txt`); return null; }
       const page = await download(u);
       const t = htmlToText(page.html, page.finalUrl);
       if (DEBUG) console.log(`\n===== ${m.id} ${page.finalUrl} html=${page.html.length} text=${t.length}\n${page.html.replace(/\s+/g, " ").slice(0, 1200)}\n----- text\n${t.slice(0, 600)}`);
-      if (DEBUG) { await mkdir(new URL("debug/", ROOT), { recursive: true }); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.html`, ROOT), page.html); await writeFile(new URL(`debug/${m.id}-${u === m.exUrl ? "ex" : "top"}.txt`, ROOT), t); }
       text += (text ? "\n\n--- 別のページ ---\n" : "") + t;
       pageUrl ||= page.finalUrl;
-    } catch (e) { fails.push(`${u}: ${e.message}`); }
+      return page;
+    } catch (e) { fails.push(`${u}: ${e.message}`); return null; }
+  };
+  const first = await read(m.exUrl || st.exUrl);
+  if (!first || text.length < 1500) {
+    const top = await read(m.url);
+    if (top && !m.exUrl) {
+      const link = findExhibitionLink(top.html, top.finalUrl);
+      if (link) { text = ""; pageUrl = ""; const p = await read(link); if (p) st.exUrl = link; else await read(m.url); }
+    }
   }
+  st.checked = TODAY;
+  done.add(m.id);
   if (!text) {
-    errors.push({ museumId: m.id, error: "download: " + fails.join(" / ") });
-    report.push(`✗ ${m.id} download failed: ${fails.join(" / ")}`);
-    results.push(...old); // keep what we had
+    st.fails = (st.fails || 0) + 1;
+    if (m.curated) errors.push({ museumId: m.id, error: "download: " + fails.join(" / ") });
+    report.push(`✗ ${m.id} ${m.name}: ${fails.join(" / ")}`);
+    results.push(...old);
     continue;
   }
+  st.fails = 0;
   text = text.slice(0, 40000);
-  const page = { finalUrl: pageUrl };
-  if (!KEY) { report.push(`✓ ${m.id} ${page.finalUrl} (${text.length} chars)${fails.length ? " [failed: " + fails.join(" / ") + "]" : ""}`); continue; }
+  if (!KEY) { report.push(`✓ ${m.id} ${pageUrl} (${text.length} chars)${fails.length ? " [" + fails.join(" / ") + "]" : ""}`); continue; }
+  if (!hasDates(text)) { st.found = 0; report.push(`· ${m.id} ${m.name}: no dates on the page`); continue; }
+  if (aiCalls >= MAX_AI) { done.delete(m.id); delete st.checked; results.push(...old); continue; }
   try {
+    aiCalls++;
     const { list, model } = await askGemini(m, text);
     const kept = [], dropped = [];
-    for (const e of list) { const r = check(m, e, text, page.finalUrl); (typeof r === "string" ? dropped : kept).push(typeof r === "string" ? `${e.title} (${r})` : r); }
+    for (const e of list) { const r = check(m, e, text, pageUrl); (typeof r === "string" ? dropped : kept).push(typeof r === "string" ? `${e.title} (${r})` : r); }
     const seen = new Set();
     const uniq = kept.filter(e => !seen.has(e.id) && seen.add(e.id));
+    st.found = uniq.length;
     results.push(...uniq);
-    report.push(`✓ ${m.id} [${model}] kept ${uniq.length}, dropped ${dropped.length}${dropped.length ? ": " + dropped.join(" / ") : ""}`);
-    if (!list.length && text.length < 1500) errors.push({ museumId: m.id, error: "page text is very short (maybe built by JavaScript)" });
+    report.push(`✓ ${m.id} ${m.name} [${model}] kept ${uniq.length}, dropped ${dropped.length}${dropped.length ? ": " + dropped.join(" / ") : ""}`);
   } catch (e) {
-    errors.push({ museumId: m.id, error: "ai: " + e.message.slice(0, 200) });
+    if (/HTTP 429/.test(e.message)) { quotaOut = true; delete st.checked; done.delete(m.id); report.push("… Gemini free quota used up for today, the rest next time"); results.push(...old); break; }
+    if (m.curated) errors.push({ museumId: m.id, error: "ai: " + e.message.slice(0, 200) });
     report.push(`✗ ${m.id} AI failed: ${e.message.slice(0, 200)}`);
     results.push(...old);
   }
@@ -221,11 +332,10 @@ for (const m of museums) {
 console.log(report.join("\n"));
 if (!KEY) { console.log("\nGEMINI_API_KEY is not set: only checked the pages, nothing written."); process.exit(0); }
 
-// Keep museums that were not part of this run (when run for a few ids only).
-const others = ONLY.length ? (prev.exhibitions || []).filter(e => !ONLY.includes(e.museumId)) : [];
+// Museums not visited this run keep what they had.
+const others = (prev.exhibitions || []).filter(e => !done.has(e.museumId) && (!e.end || e.end >= TODAY));
 const all = [...others, ...results].sort((a, b) => (a.end || "9999").localeCompare(b.end || "9999"));
 const out = { updatedAt: new Date().toISOString(), today: TODAY, exhibitions: all, errors };
-const same = JSON.stringify({ ...prev, updatedAt: 0, today: 0 }) === JSON.stringify({ ...out, updatedAt: 0, today: 0 });
-if (same) { console.log("\nNo changes."); process.exit(0); }
-await writeFile(new URL("data/exhibitions.json", ROOT), JSON.stringify(out, null, 1) + "\n");
-console.log(`\nWrote ${all.length} exhibitions (${errors.length} museums with errors).`);
+await writeFile(new URL("data/exhibitions-state.json", ROOT), JSON.stringify(state) + "\n");
+await writeFile(new URL("data/exhibitions.json", ROOT), JSON.stringify(out) + "\n");
+console.log(`\nWrote ${all.length} exhibitions from ${new Set(all.map(e => e.museumId)).size} museums. AI calls: ${aiCalls}.`);
