@@ -1,0 +1,17 @@
+{
+  "name": "ArtScan",
+  "short_name": "ArtScan",
+  "description": "美術館で撮った作品を、AIで作品名と解説つきのコレクションに。",
+  "lang": "ja",
+  "start_url": "./#collection",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef0ef",
+  "theme_color": "#eef0ef",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

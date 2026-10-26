@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ArtScan</title>
+<meta name="description" content="美術館で撮った作品を、AIで作品名と解説つきのコレクションに。">
+<meta name="theme-color" content="#eef0ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141716" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ArtScan">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="brand">Art<span>Scan</span></div>
+      <div class="sub">美術館で撮った作品を、名前と解説つきで残す</div>
+    </div>
+    <div class="top-right">
+      <span class="small muted mono" id="count"></span>
+      <button class="icon-btn" id="btnSettings" aria-label="設定">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- コレクション -->
+  <section class="view" id="v-collection">
+    <div class="toolbar">
+      <input class="search" id="q" type="search" placeholder="作品名・作家・美術館・メモで検索" aria-label="検索">
+      <select class="select" id="sort" aria-label="並び順">
+        <option value="new">新しい順</option>
+        <option value="old">古い順</option>
+        <option value="artist">作家名順</option>
+        <option value="year">制作年順</option>
+      </select>
+    </div>
+    <div class="chips" id="groupChips" role="tablist" aria-label="絞り込みの種類">
+      <button class="chip" data-g="artist" aria-pressed="true">作家</button>
+      <button class="chip" data-g="museum" aria-pressed="false">美術館</button>
+      <button class="chip" data-g="movement" aria-pressed="false">様式</button>
+      <button class="chip" data-g="fav" aria-pressed="false">♥ お気に入り</button>
+    </div>
+    <div class="chips" id="chips" aria-label="絞り込み"></div>
+    <div id="sampleNote" class="status small" hidden>これはサンプルです。下の「スキャン」から最初の作品を撮影すると、ここがあなたのコレクションになります。</div>
+    <div class="wall" id="wall"></div>
+  </section>
+
+  <!-- 美術館（地図＋記録） -->
+  <section class="view" id="v-museums" hidden>
+    <h2>美術館マップ</h2>
+    <div id="map" class="map" role="region" aria-label="作品を撮った場所の地図"></div>
+    <p class="small muted" id="mapNote" style="margin:0"></p>
+    <h3>訪問の記録</h3>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <!-- スキャン -->
+  <section class="view" id="v-scan" hidden>
+    <h2>作品をスキャン</h2>
+    <div id="keyNotice" class="empty" hidden>
+      <strong>最初にAPIキーを設定してください</strong>
+      <span class="small muted">AI識別には、お持ちのClaude APIキーを使います。キーはこの端末の中だけに保存されます。</span>
+      <button class="btn primary" id="btnGoSettings">設定を開く</button>
+    </div>
+    <p class="muted small" style="margin:0">作品の写真だけでも識別できます。壁のキャプション（ラベル）も撮ると精度が上がり、ラベルの文字も保存されます。</p>
+    <div class="shots">
+      <div class="shot" id="shotArt">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/></svg>
+        <div class="cap">作品</div><div class="hint">撮影 または 写真を選ぶ</div>
+        <input id="inArt" type="file" accept="image/*" aria-label="作品の写真">
+      </div>
+      <div class="shot" id="shotLabel">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M7 10h10M7 13h7M7 16h5"/></svg>
+        <div class="cap">ラベル（任意）</div><div class="hint">作品横のキャプション</div>
+        <input id="inLabel" type="file" accept="image/*" aria-label="ラベルの写真">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="inMuseum">美術館・展覧会</label><input id="inMuseum" list="museumList" placeholder="例：国立西洋美術館" autocomplete="off"></div>
+      <div class="field"><label for="inDate">訪問日</label><input id="inDate" type="date"></div>
+    </div>
+    <div class="small muted" id="geoNote"></div>
+    <datalist id="museumList"></datalist>
+    <div class="row">
+      <button class="btn primary" id="btnIdentify" disabled>AIで識別する</button>
+      <button class="btn ghost" id="btnManual">手入力で保存</button>
+    </div>
+    <div id="scanStatus" class="status" hidden></div>
+    <div id="result" class="view" hidden></div>
+  </section>
+
+  <!-- 発見 -->
+  <section class="view" id="v-discover" hidden>
+    <h2>発見</h2>
+    <div class="box">
+      <h3>あなたへのおすすめ</h3>
+      <p class="small muted" style="margin:0">コレクションの傾向から好みを読み取り、次に見てほしい作品を選びます。</p>
+      <div class="row"><button class="btn primary" id="btnDiscover">おすすめを作る</button></div>
+      <div id="discoverOut" class="rec-list"></div>
+    </div>
+    <div class="box">
+      <h3>行く前に予習</h3>
+      <p class="small muted" style="margin:0">これから行く美術館や展覧会の名前を入れると、見逃せない作品を教えてくれます。</p>
+      <div class="row"><input class="search" id="planName" placeholder="例：大原美術館、モネ展"><button class="btn" id="btnPlan">調べる</button></div>
+      <div id="planOut" class="rec-list"></div>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="メイン">
+  <div class="in">
+    <button data-tab="collection" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="6"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="15" width="7" height="6"/></svg>コレクション</button>
+    <button data-tab="museums"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>マップ</button>
+    <button data-tab="scan" class="scan-btn"><span class="scan-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="3.5"/></svg></span>スキャン</button>
+    <button data-tab="discover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>発見</button>
+  </div>
+</nav>
+
+<div class="sheet" id="sheet" hidden><div class="in" id="sheetIn"></div></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/exifr-lite.umd.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
