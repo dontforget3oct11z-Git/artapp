@@ -807,7 +807,8 @@ function renderSyncDot() {
 const TABS = ["collection", "museums", "scan", "events", "calendar", "discover"];
 function go(tab) {
   TABS.forEach(t => { $("#v-" + t).hidden = t !== tab; });
-  document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  const navTab = tab === "scan" ? "collection" : tab;
+  document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === navTab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   window.scrollTo(0, 0);
   if (tab === "museums") museumsTab.render();
   if (tab === "calendar") calendarTab.render();
@@ -816,6 +817,28 @@ function go(tab) {
   try { history.replaceState(history.state, "", "#" + tab); } catch {}
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.tab));
+$("#fabScan").onclick = () => go("scan");
+$("#scanBack").onclick = () => go("collection");
+
+// How many pictures per row in the collection (empty = automatic).
+const COLS_KEY = "artmuse.cols";
+function setCols(n) {
+  try { n ? localStorage.setItem(COLS_KEY, n) : localStorage.removeItem(COLS_KEY); } catch {}
+  const wall = $("#wall");
+  wall.classList.remove("c1", "c2", "c3", "c4");
+  if (n) wall.classList.add("c" + n);
+  document.querySelectorAll("#colsSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.c === String(n || ""))));
+}
+let cols0 = ""; try { cols0 = localStorage.getItem(COLS_KEY) || ""; } catch {}
+if (!cols0) cols0 = Math.max(1, Math.min(4, Math.floor(($("#wall").clientWidth || window.innerWidth - 32) / 164))) || 2;
+setCols(cols0);
+$("#colsSeg").onclick = e => { const b = e.target.closest("[data-c]"); if (b) setCols(b.dataset.c); };
+
+// Keep the search box just under the app header while scrolling.
+const hdr = document.querySelector("header.top");
+const setHdr = () => document.documentElement.style.setProperty("--hdr", (hdr?.offsetHeight || 60) + "px");
+setHdr(); window.addEventListener("resize", setHdr);
+if (window.ResizeObserver && hdr) new ResizeObserver(setHdr).observe(hdr);
 
 /* ================= start ================= */
 Object.assign(app, {

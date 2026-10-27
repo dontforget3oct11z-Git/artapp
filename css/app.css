@@ -54,7 +54,7 @@ h3{font-family:var(--f-display);font-size:18px;margin:0;text-wrap:balance}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--paper);border-top:1px solid var(--line);
   display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);
   padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(6,1fr);width:100%;max-width:600px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:600px}
 nav.tabs button{background:none;border:0;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:11px}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
@@ -453,7 +453,7 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 .mpick span{font-size:12px;color:var(--muted)}
 
 /* picking works to merge */
-.selbar{position:sticky;top:64px;z-index:15;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.selbar{position:sticky;top:calc(var(--hdr,60px) + 58px);z-index:15;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 .selbar span{flex:1;font-size:14px;font-weight:600}
 .work{position:relative}
 .pick-mark{position:absolute;top:8px;left:8px;z-index:2;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.35);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
@@ -469,3 +469,34 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 .carousel .slide .frame img{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;background:none}
 .carousel .slide.broken .frame{min-height:200px;background:var(--chip)}
 .carousel .slide.broken img{display:none}
+
+/* collection: scan button, fixed search, pictures per row */
+.colbar{position:sticky;top:var(--hdr,60px);z-index:14;flex-wrap:nowrap;margin-inline:-16px;padding:8px 16px;
+  background:var(--glass);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px)}
+.colbar .search{flex:1 1 auto}
+#v-collection .colbar{margin-block:-8px}
+.vh-tools{display:flex;align-items:center;gap:8px}
+#colsSeg button{padding:2px 9px}
+.wall.c1{grid-template-columns:1fr}
+.wall.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.wall.c3{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 10px}
+.wall.c4{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 6px}
+.wall.c3 .label{padding-left:6px}
+.wall.c3 .label .artist{font-size:10.5px}
+.wall.c3 .label .title{font-size:12px}
+.wall.c3 .label .meta{display:none}
+.wall.c4 .label{display:none}
+.wall.c4 .work{gap:0}
+.wall.c3 .ph-count,.wall.c4 .ph-count{font-size:10px}
+.wall.c1 .frame{aspect-ratio:auto;max-height:80vh}
+.wall.c1 .frame img{height:auto;max-height:80vh;object-fit:contain}
+.fab-scan{position:fixed;z-index:19;right:max(16px,calc(50% - 480px + 16px));bottom:calc(env(safe-area-inset-bottom,0px) + 76px);
+  display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:12px 18px 12px 14px;
+  background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:14px;box-shadow:0 10px 24px -8px var(--shadow),0 0 0 3px var(--wall)}
+.fab-scan svg{width:22px;height:22px}
+#v-collection[hidden] .fab-scan{display:none}
+#wall{padding-bottom:64px}
+.backlink{background:none;border:0;padding:0 0 6px;color:var(--muted);font-size:13px}
+#v-collection .vh h2,.vh-tools .btn{white-space:nowrap}
+#v-collection .vh{align-items:center}
+#colsSeg button{padding:2px 8px}
