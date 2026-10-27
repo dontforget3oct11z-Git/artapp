@@ -349,6 +349,29 @@ $("#wall").onclick = e => {
   render();
 };
 
+// A photo that cannot be shown: try to repair the work once (re-copy, fetch from the shared space, new thumbnail).
+const repaired = new Set();
+async function repairWork(id) {
+  if (!id || repaired.has(id)) return;
+  repaired.add(id);
+  const w = works.find(x => x.id === id); if (!w) return;
+  try {
+    await Ph.repair(stripUrls(w), sync.enabled() ? sync.fetchPhotos : null);
+    await reload();
+    if (!$("#sheet").hidden && $("#dCar, .photos") && document.querySelector(`[data-wid="${CSS.escape(id)}"]`)) openDetail(id);
+  } catch {}
+}
+$("#wall").addEventListener("error", e => {
+  if (e.target.tagName !== "IMG") return;
+  const card = e.target.closest(".work"); if (card) repairWork(card.dataset.id);
+}, true);
+$("#sheetIn").addEventListener("error", e => {
+  const img = e.target; if (img.tagName !== "IMG") return;
+  const box = img.closest("[data-wid]"); if (!box) return;
+  img.closest(".slide")?.classList.add("broken");
+  repairWork(box.dataset.wid);
+}, true);
+
 /* ================= tidy: merge works you pick, unify museum names ================= */
 let selecting = false;
 const selected = new Set();
@@ -432,9 +455,9 @@ onSheetClose(() => askAbort?.abort());
 // Photos of a work: swipe sideways (main photo first). Add more, remove one, or make one the main photo.
 function photosHtml(w) {
   const keys = w.sample ? [] : Ph.keysOf(w);
-  if (keys.length <= 1) return `<div class="photos"><div class="frame">${imageOf(w) ? `<img src="${imageOf(w)}" alt="${esc(w.title)}">` : ""}</div>
+  if (keys.length <= 1) return `<div class="photos" data-wid="${esc(w.id)}"><div class="frame">${imageOf(w) ? `<img src="${imageOf(w)}" alt="${esc(w.title)}">` : ""}</div>
     ${w.sample ? "" : `<div class="ph-bar"><label class="btn small ghost" for="dAddPh">＋ 写真を追加</label><input id="dAddPh" type="file" accept="image/*" multiple hidden></div>`}</div>`;
-  return `<div class="photos">
+  return `<div class="photos" data-wid="${esc(w.id)}">
     <div class="carousel" id="dCar" tabindex="0" aria-label="作品の写真 ${keys.length}枚">${keys.map((k, i) => `<div class="slide" data-k="${esc(k)}"><div class="frame"><img src="${urlFor(w[k])}" alt="${esc(w.title)}（${i + 1}/${keys.length}）" ${i ? 'loading="lazy"' : ""}></div></div>`).join("")}</div>
     <div class="ph-bar"><span class="dots" id="dDots">${keys.map((k, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</span><span class="small muted mono" id="dPhN">1 / ${keys.length}</span>
       <span class="grow"></span><label class="btn small ghost" for="dAddPh">＋ 追加</label><input id="dAddPh" type="file" accept="image/*" multiple hidden>
@@ -447,9 +470,14 @@ function bindPhotos(w) {
   let cur = 0;
   const car = $("#dCar");
   if (car) {
+    // the box takes the height of the photo shown, so tall and wide photos both fit without empty space
+    const fit = () => { const sl = car.children[cur]; if (sl) car.style.height = sl.offsetHeight + "px"; };
+    car.querySelectorAll("img").forEach(img => { if (img.complete) return; img.addEventListener("load", fit); img.loading = "eager"; });
+    requestAnimationFrame(fit);
+    window.addEventListener("resize", fit);
     car.onscroll = () => {
       const i = Math.round(car.scrollLeft / car.clientWidth);
-      if (i === cur) return; cur = i;
+      if (i === cur) return; cur = i; fit();
       $("#dDots").querySelectorAll("i").forEach((d, j) => d.classList.toggle("on", j === i));
       $("#dPhN").textContent = `${i + 1} / ${keys.length}`;
       $("#dPhMain").disabled = i === 0;

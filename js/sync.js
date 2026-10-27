@@ -270,6 +270,21 @@ export async function syncNow() {
   return running;
 }
 
+// The photos of one work as they are in the shared space (to repair a photo this device lost).
+export async function fetchPhotos(id) {
+  const c = readCfg(); if (!c?.space) return {};
+  if (!db) await connect(c.fb);
+  const d = await fb.getDoc(fb.doc(col(c.space, "works"), id));
+  if (!d.exists()) return {};
+  const r = d.data(), out = {};
+  for (const k of blobKeys(r)) {
+    if (!(r.blobsUp || []).includes(k)) continue;
+    const b = await fb.getDoc(fb.doc(col(c.space, "blobs"), id + "__" + k));
+    if (b.exists()) out[k] = toBlob(b.data().data, b.data().type);
+  }
+  return out;
+}
+
 // For the settings screen: how many works are in the shared space and on this device.
 export async function stats() {
   const c = readCfg(); if (!c?.space) return null;
