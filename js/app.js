@@ -5,6 +5,7 @@ import * as sync from "./sync.js";
 import * as P from "./places.js";
 import * as museumsTab from "./museums.js";
 import * as calendarTab from "./calendar.js";
+import * as eventsTab from "./events.js";
 import * as bulk from "./bulk.js";
 import { $, esc, today, toast, openSheet, closeSheet, onSheetClose, app, loadImg, toBlob, reverseGeocode, photoMeta, dist } from "./ui.js";
 const yen = usd => { const y = usd * ai.USD_JPY; return "¥" + (y < 10 ? y.toFixed(1) : Math.round(y).toLocaleString("ja-JP")); };
@@ -308,6 +309,7 @@ function render() {
   $("#museumList").innerHTML = [...new Set(works.map(w => w.museum).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join("");
   if (!$("#v-museums").hidden) museumsTab.render();
   if (!$("#v-calendar").hidden) calendarTab.render();
+  if (!$("#v-events").hidden) eventsTab.render();
 }
 $("#q").oninput = render;
 $("#sort").onchange = render;
@@ -604,13 +606,14 @@ function renderSyncDot() {
 }
 
 /* ================= tabs & misc ================= */
-const TABS = ["collection", "museums", "scan", "calendar", "discover"];
+const TABS = ["collection", "museums", "scan", "events", "calendar", "discover"];
 function go(tab) {
   TABS.forEach(t => { $("#v-" + t).hidden = t !== tab; });
   document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   window.scrollTo(0, 0);
   if (tab === "museums") museumsTab.render();
   if (tab === "calendar") calendarTab.render();
+  if (tab === "events") eventsTab.render();
   if (tab === "scan") updateIdentify();
   try { history.replaceState(history.state, "", "#" + tab); } catch {}
 }
@@ -622,10 +625,12 @@ Object.assign(app, {
   openMuseum: id => museumsTab.openMuseum(id),
   refreshMuseums: () => { if (!$("#v-museums").hidden) museumsTab.render(); },
   showExhibitionsFor: id => calendarTab.showExhibitionsFor(id),
+  refreshExhibitions: () => { if (!$("#v-calendar").hidden) calendarTab.render(); if (!$("#v-events").hidden) eventsTab.render(); },
   normalize, nearestMuseum, verify, merge, updateIdentify,
 });
 museumsTab.init();
 calendarTab.init();
+eventsTab.init();
 bulk.init();
 
 $("#inDate").value = today();

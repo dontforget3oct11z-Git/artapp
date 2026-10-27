@@ -40,6 +40,19 @@ function baseList() {
 }
 export const isJapan = m => !m.cc || m.cc === "JP";
 
+// Areas between country and city: Japanese regions, and everything abroad as one.
+export const AREAS = ["北海道", "東北", "関東", "中部", "関西", "中国", "四国", "九州・沖縄", "海外"];
+const AREA_OF = {};
+[["北海道", "北海道"], ["東北", "青森県 岩手県 宮城県 秋田県 山形県 福島県"], ["関東", "茨城県 栃木県 群馬県 埼玉県 千葉県 東京都 神奈川県"],
+ ["中部", "新潟県 富山県 石川県 福井県 山梨県 長野県 岐阜県 静岡県 愛知県"], ["関西", "三重県 滋賀県 京都府 大阪府 兵庫県 奈良県 和歌山県"],
+ ["中国", "鳥取県 島根県 岡山県 広島県 山口県"], ["四国", "徳島県 香川県 愛媛県 高知県"], ["九州・沖縄", "福岡県 佐賀県 長崎県 熊本県 大分県 宮崎県 鹿児島県 沖縄県"]]
+  .forEach(([a, ps]) => ps.split(" ").forEach(p => { AREA_OF[p] = a; }));
+export function areaOf(m) {
+  if (!m) return "";
+  if (!isJapan(m)) return "海外";
+  return AREA_OF[m.pref] || "";
+}
+
 // Which museum a work belongs to: chosen id, then name, then place (within 400 m).
 export function museumIdFor(w, list = baseList()) {
   if (w.museumId && list.some(m => m.id === w.museumId)) return w.museumId;
@@ -77,6 +90,7 @@ export function museums(works) {
     m.note = r.note || "";
     m.status = m.went ? "went" : m.want ? "want" : "";
     m.current = openCount.get(m.id) || 0;
+    m.ticket = r.ticket || null;
   }
   return [...byId.values()];
 }
@@ -97,6 +111,16 @@ export async function addVisit(id, day) {
   const visits = [...new Set([...(r.visits || []), day])].sort();
   museumRecs.set(id, await store.save("museums", { ...r, status: "went", visits }));
 }
+// A ticket bought for a museum (not for one exhibition): {day, note}, or null to remove.
+export async function setMuseumTicket(id, ticket) {
+  const r = museumRecs.get(id) || { id };
+  const n = { ...r, ticket: ticket || null };
+  if (ticket && !r.status) n.status = "want";
+  museumRecs.set(id, await store.save("museums", n));
+}
+export function museumTickets() {
+  return [...museumRecs.values()].filter(r => r.ticket && !r.deleted).map(r => ({ id: r.id, ...r.ticket, museum: museumById(r.id) })).filter(t => t.museum);
+}
 export async function addCustomMuseum(m) {
   const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const rec = { id, status: m.status || "", custom: { name: m.name, pref: m.pref || "", city: m.city || "", lat: m.lat, lng: m.lng, url: m.url || "", cc: m.cc || "JP", country: m.country || "日本" }, visits: m.status === "went" ? [today()] : [] };
@@ -116,7 +140,7 @@ export function allExhibitions() {
   const out = [];
   for (const e of feed) out.push({ ...e, mine: false, museum: mus(e.museumId) });
   for (const e of events) out.push({ ...e, mine: true, museum: e.museumId ? mus(e.museumId) : null });
-  return out.map(e => ({ ...e, mark: marks.get(e.id) || {}, venueName: e.museum?.name || e.venueName || "" }));
+  return out.map(e => ({ ...e, mark: marks.get(e.id) || {}, venueName: e.museum?.name || e.venueName || "", area: areaOf(e.museum) }));
 }
 
 export async function setMark(id, patch) {

@@ -149,6 +149,11 @@ export function openMuseum(id) {
     <h2>${esc(m.name)}</h2>
     <div class="small muted">${esc(P.isJapan(m) ? (m.pref || "") + (m.city || "") : [m.country, m.city].filter(Boolean).join(" "))}${m.en ? ` ・ ${esc(m.en)}` : ""}</div>
     ${statusButtons(m)}
+    <div class="box ticketbox"><h3>🎫 チケット</h3>
+      ${m.ticket ? `<div class="small"><b>購入済み</b>${m.ticket.day ? ` ・ 行く日 ${esc(jpDate(m.ticket.day))}` : ""}${m.ticket.note ? ` ・ ${esc(m.ticket.note)}` : ""}</div>` : `<div class="small muted">入館券・年間パスポートなどを買ったら記録できます。展覧会のチケットは「展示」タブの各展示から登録できます。</div>`}
+      <div class="grid2"><div class="field"><label for="msTkDay">行く日（任意）</label><input type="date" id="msTkDay" value="${esc(m.ticket?.day || "")}"></div>
+      <div class="field"><label for="msTkNote">メモ</label><input id="msTkNote" value="${esc(m.ticket?.note || "")}" placeholder="例：年パス・2026年12月まで"></div></div>
+      <div class="row"><button class="btn small" id="msTkSave">${m.ticket ? "チケットの記録を更新" : "チケット購入済みにする"}</button>${m.ticket ? `<button class="btn small ghost danger" id="msTkDel">記録を消す</button>` : ""}</div></div>
     <div class="box"><h3>行った日</h3>
       ${m.visits.length ? `<div class="chips" style="flex-wrap:wrap">${m.visits.map(d => `<span class="chip">${esc(d.replace(/-/g, "."))}</span>`).join("")}</div>` : `<div class="small muted">まだ記録がありません。</div>`}
       <div class="row"><input type="date" id="msDay" value="${today()}" class="select"><button class="btn small" id="msAddDay">行った日を追加</button></div></div>
@@ -166,6 +171,11 @@ export function openMuseum(id) {
     await handleCommon(e);
   };
   $("#msAddDay").onclick = async () => { const d = $("#msDay").value; if (!d) return; await P.addVisit(id, d); render(); openMuseum(id); toast("行った日を追加しました"); };
+  $("#msTkSave").onclick = async () => {
+    await P.setMuseumTicket(id, { day: $("#msTkDay").value, note: $("#msTkNote").value.trim() });
+    render(); app.refreshExhibitions?.(); openMuseum(id); toast("チケット購入済みにしました");
+  };
+  if ($("#msTkDel")) $("#msTkDel").onclick = async () => { await P.setMuseumTicket(id, null); render(); app.refreshExhibitions?.(); openMuseum(id); toast("チケットの記録を消しました"); };
   $("#msSaveNote").onclick = async () => {
     const r = P.museumRec(id) || { id };
     const { save } = await import("./store.js"); await save("museums", { ...r, note: $("#msNote").value.trim() });

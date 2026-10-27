@@ -54,7 +54,7 @@ h3{font-family:var(--f-display);font-size:18px;margin:0;text-wrap:balance}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--paper);border-top:1px solid var(--line);
   display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);
   padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:600px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(6,1fr);width:100%;max-width:600px}
 nav.tabs button{background:none;border:0;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:11px}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
@@ -385,3 +385,46 @@ details.pref[open] summary h3::before{content:"−"}
 .bulk-pill i{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);transition:width .9s linear}
 .bulk-pill.warn i{background:var(--warn)}
 .bulk-pill.fin i{background:var(--ok)}
+
+/* exhibition filters (checkboxes) */
+.exf{border:1px solid var(--line);border-radius:var(--r);background:var(--paper)}
+.exf summary{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none;font-size:14px}
+.exf summary::-webkit-details-marker{display:none}
+.exf summary::after{content:"▾";margin-left:auto;color:var(--muted)}
+.exf[open] summary::after{content:"▴"}
+.exf-k{font-weight:600;flex:none}
+.exf-s{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.exf-body{padding:0 12px 12px;display:flex;flex-direction:column;gap:10px}
+.exf fieldset{border:0;margin:0;padding:0}
+.exf legend{font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.04em}
+.exf-opts{display:flex;flex-wrap:wrap;gap:6px}
+.check{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.exf .check{border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--wall)}
+.exf .check:has(input:checked){border-color:var(--ink);background:var(--ink);color:var(--paper)}
+.exf .check input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
+.exf .check:has(input:checked) input{accent-color:var(--paper)}
+/* status badges on cards */
+.stbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff;letter-spacing:.04em}
+.stbadge.open{background:var(--ok)}
+.stbadge.soon{background:var(--bad)}
+.stbadge.upcoming{background:#3d6aa8}
+.stbadge.ended{background:var(--muted)}
+.excard .top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.excard .top .left{margin-left:auto}
+.excard .tk{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink)}
+.excard .tk.went{color:var(--ok)}
+.excard.ticketed{border-left:3px solid var(--accent)}
+.excard.ended{opacity:.7}
+.ev.ticket{background:var(--accent);color:#fff}
+/* counts on the exhibitions tab */
+.evcounts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.evc{border:1px solid var(--line);border-radius:var(--r);background:var(--paper);padding:8px 4px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.evc b{font-size:20px;font-weight:600}
+.evc span{font-size:11px;color:var(--muted)}
+.evc.open b{color:var(--ok)}.evc.soon b{color:var(--bad)}.evc.upcoming b{color:#3d6aa8}.evc.ended b{color:var(--muted)}
+@media (prefers-color-scheme:dark){.stbadge.upcoming{background:#5b86c4}.evc.upcoming b{color:#8fb2e6}}
+nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowrap}
+@media (max-width:380px){nav.tabs button{font-size:9.5px}}
+.excard .acts{flex-wrap:nowrap;gap:6px}
+.excard .acts .btn{padding-left:10px;padding-right:10px;white-space:nowrap}
+.excard .acts [data-act="more"]{margin-left:auto}
