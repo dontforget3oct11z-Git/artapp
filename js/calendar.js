@@ -288,7 +288,11 @@ export function openAddEvent(pre, draft) {
     set("#aeTitle", r.title); set("#aeUrl", r.url); set("#aeSum", r.summary);
     if (/^\d{4}-\d{2}-\d{2}$/.test(r.start)) $("#aeStart").value = r.start;
     if (/^\d{4}-\d{2}-\d{2}$/.test(r.end)) $("#aeEnd").value = r.end;
-    const hit = r.venue && all.find(m => m.name.includes(r.venue) || r.venue.includes(m.name));
+    const v = String(r.venue || "").replace(/\s/g, ""), nm = m => m.name.replace(/\s/g, "");
+    // exact name first, then the longest list name inside the venue, then the shortest name containing it
+    const hit = v && (all.find(m => nm(m) === v) ||
+      all.filter(m => v.includes(nm(m))).sort((a, b) => nm(b).length - nm(a).length)[0] ||
+      all.filter(m => nm(m).includes(v)).sort((a, b) => nm(a).length - nm(b).length)[0]);
     if (hit) $("#aeMuseum").value = hit.id; else if (r.venue) { $("#aeMuseum").value = ""; $("#aeVenue").value = r.venue; }
   }
   if (draft) {

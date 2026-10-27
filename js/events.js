@@ -36,6 +36,7 @@ export function render() {
   // not in the app? look it up outside and bring it in
   $("#evWeb").hidden = !q;
   if (q) {
+    $("#evWeb").style.order = list.length ? "10" : ""; // below the results when there are some
     $("#evWebTitle").textContent = list.length ? `「${q}」が見つからないときは` : `「${q}」はアプリの一覧にありません`;
     $("#evWebSearch").href = "https://www.google.com/search?q=" + encodeURIComponent(`${q} 展覧会 会期`);
   }
