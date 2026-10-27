@@ -1,0 +1,28 @@
+# Developer check: does the app's AI identification work with the real Gemini API?
+name: AI読み取りテスト
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "試すモデル（空白区切り）"
+        required: false
+        default: "gemini-3.8-flash gemini-3.5-flash-lite"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 識別を試す
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MODELS: ${{ github.event.inputs.models }}
+        run: node scripts/test-identify.mjs
