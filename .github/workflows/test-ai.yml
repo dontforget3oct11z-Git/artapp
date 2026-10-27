@@ -8,6 +8,10 @@ on:
         description: "試すモデル（空白区切り）"
         required: false
         default: "gemini-3.8-flash gemini-3.5-flash-lite"
+      mode:
+        description: "identify（作品の識別）か url（展示ページの読み取り）"
+        required: false
+        default: "identify"
 
 permissions:
   contents: read
@@ -25,4 +29,5 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MODELS: ${{ github.event.inputs.models }}
-        run: node scripts/test-identify.mjs
+          MODE: ${{ github.event.inputs.mode }}
+        run: if [ "$MODE" = "url" ]; then node scripts/test-event-url.mjs; else node scripts/test-identify.mjs; fi

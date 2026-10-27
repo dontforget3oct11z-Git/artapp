@@ -502,3 +502,5 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 #colsSeg button{padding:2px 8px}
 /* no zoom on double tap inside the app (pinch still works) */
 html,body,button,a,input,select,textarea,label,.work,.slide{touch-action:manipulation}
+.evweb{display:flex;flex-direction:column;gap:10px}
+.evweb .row .search{flex:1 1 160px}

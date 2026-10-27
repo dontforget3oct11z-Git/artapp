@@ -247,7 +247,8 @@ function openExhibition(ex) {
 }
 
 // Add an exhibition yourself: from a flyer photo / pasted text (AI reads it), or by hand.
-export function openAddEvent(pre) {
+// draft: what the AI read from a web page or flyer, shown for checking before saving.
+export function openAddEvent(pre, draft) {
   const all = P.museums(app.works()).sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const e = pre || {};
   openSheet(`<div class="bar"><button class="btn ghost" id="aeClose">キャンセル</button><button class="btn primary" id="aeSave">保存</button></div>
@@ -278,15 +279,23 @@ export function openAddEvent(pre) {
     try {
       const r = await ai.extractEvent({ ...(await getArgs()), todayStr: today() });
       if (!r.found) { $("#aeMsg").textContent = "展覧会の情報を読み取れませんでした。手で入れてください。"; return; }
-      const set = (id, v) => { if (v) $(id).value = v; };
-      set("#aeTitle", r.title); set("#aeUrl", r.url); set("#aeSum", r.summary);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(r.start)) $("#aeStart").value = r.start;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(r.end)) $("#aeEnd").value = r.end;
-      const hit = r.venue && all.find(m => m.name.includes(r.venue) || r.venue.includes(m.name));
-      if (hit) $("#aeMuseum").value = hit.id; else if (r.venue) { $("#aeMuseum").value = ""; $("#aeVenue").value = r.venue; }
+      setFrom(r);
       $("#aeMsg").textContent = "読み取りました。内容を確かめてから保存してください。";
     } catch (err) { $("#aeMsg").textContent = err.message; }
   };
+  function setFrom(r) {
+    const set = (id, v) => { if (v) $(id).value = v; };
+    set("#aeTitle", r.title); set("#aeUrl", r.url); set("#aeSum", r.summary);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(r.start)) $("#aeStart").value = r.start;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(r.end)) $("#aeEnd").value = r.end;
+    const hit = r.venue && all.find(m => m.name.includes(r.venue) || r.venue.includes(m.name));
+    if (hit) $("#aeMuseum").value = hit.id; else if (r.venue) { $("#aeMuseum").value = ""; $("#aeVenue").value = r.venue; }
+  }
+  if (draft) {
+    setFrom(draft);
+    $("#aeMsg").textContent = "ネットから読み取りました。会期や会場が合っているか確かめてから保存してください。";
+    $("#aeMsg").closest(".box").scrollIntoView?.({ block: "end" });
+  }
   if ($("#aeImg")) $("#aeImg").onchange = ev => { const f = ev.target.files[0]; if (f) fill(async () => ({ image: await toBlob(await loadImg(f), 1600, .85) })); };
   if ($("#aeRead")) $("#aeRead").onclick = () => { const t = $("#aeText").value.trim(); if (!t) { toast("文章を貼ってください"); return; } fill(async () => ({ text: t })); };
   $("#aeSave").onclick = async () => {

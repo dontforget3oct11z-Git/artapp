@@ -53,4 +53,10 @@ export function ask(work, history, question, opts) { const c = current(); return
 export function recommend(works) { const c = current(); return c.impl.recommend({ key: c.key, model: c.model }, works); }
 export function preview(place) { const c = current(); return c.impl.preview({ key: c.key, model: c.model }, place); }
 export function extractEvent(args) { const c = current(); return c.impl.extractEvent({ key: c.key, model: c.model }, args); }
+// Reading a web page needs Gemini (free). Uses the Gemini key even when Claude is the main AI.
+export function extractEventFromUrl(args) {
+  const key = settings.keyFor("gemini");
+  if (!key) throw new AiError("no_key", "ページの読み取りにはGeminiのAPIキー（無料）が必要です。設定から入力してください。");
+  return gemini.extractEventFromUrl({ key, model: settings.modelFor("gemini") }, args);
+}
 export function testKey(provider, key) { return PROVIDERS[provider].impl.testKey(key); }

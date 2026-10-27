@@ -1,7 +1,7 @@
 // Gemini API (free tier) — called directly from the browser with the user's own free API key.
 // Uses the generateContent REST endpoint.
 import { AiError, addUsage, parseJson, toBase64, WORK_SCHEMA, PICKS_SCHEMA, SYSTEM_IDENTIFY,
-  identifyText, askSystem, recommendPrompt, previewPrompt, EVENT_SCHEMA, eventPrompt } from "./common.js";
+  identifyText, askSystem, recommendPrompt, previewPrompt, EVENT_SCHEMA, eventPrompt, eventUrlPrompt } from "./common.js";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -180,6 +180,19 @@ export async function extractEvent({ key, model }, { image, text, todayStr }) {
     generationConfig: { responseMimeType: "application/json", responseSchema: toGeminiSchema(EVENT_SCHEMA) } };
   const { data } = await callWithBackup(key, model, body, { kind: "event" });
   return parseJson(textOf(data));
+}
+
+// Read an exhibition from its web page (Gemini's URL context tool: the page is read by Google,
+// and counts as ordinary input on the free tier). Plain JSON in the text, since tools and a
+// response schema don't always mix.
+export async function extractEventFromUrl({ key, model }, { url, hint, todayStr }) {
+  const body = { contents: [{ role: "user", parts: [{ text: eventUrlPrompt({ url, hint, todayStr }) }] }], safetySettings: SAFETY,
+    tools: [{ url_context: {} }] };
+  const { data } = await callWithBackup(key, model, body, { kind: "event" });
+  const r = parseJson(textOf(data)) || {};
+  const st = data?.candidates?.[0]?.urlContextMetadata?.urlMetadata?.[0]?.urlRetrievalStatus || "";
+  if (st && !/SUCCESS/.test(st)) r.found = false;
+  return r;
 }
 
 // Free check: reading a model's info costs nothing and uses no quota for generation.

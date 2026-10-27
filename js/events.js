@@ -3,7 +3,8 @@
 import * as P from "./places.js";
 import * as F from "./exfilter.js";
 import { section, handleCardClick, infoHtml, openAddEvent, expand } from "./calendar.js";
-import { $, esc, app, today, addDays } from "./ui.js";
+import { $, esc, app, today, addDays, toast } from "./ui.js";
+import * as ai from "./ai.js";
 
 const DEFAULTS = { status: ["open", "upcoming"], kind: ["special", "collection", "other"], area: [], show: ["all"] };
 let fst = null, q = "";
@@ -32,6 +33,12 @@ export function render() {
     <div class="evc upcoming"><b>${c.upcoming}</b><span>開催前</span></div><div class="evc ended"><b>${c.ended}</b><span>終了</span></div>`;
 
   const html = section("まもなく終了（2週間以内）", soon) + section("開催中", now) + section("開催前", upcoming) + section("終了した展示", ended);
+  // not in the app? look it up outside and bring it in
+  $("#evWeb").hidden = !q;
+  if (q) {
+    $("#evWebTitle").textContent = list.length ? `「${q}」が見つからないときは` : `「${q}」はアプリの一覧にありません`;
+    $("#evWebSearch").href = "https://www.google.com/search?q=" + encodeURIComponent(`${q} 展覧会 会期`);
+  }
   $("#evList").innerHTML = html || `<div class="empty"><strong>この条件の展示はありません</strong><span class="small muted">「絞り込み」のチェックやエリアを変えてみてください。</span></div>`;
   $("#evInfo").innerHTML = infoHtml();
 }
@@ -43,5 +50,31 @@ export function init() {
   let qt; $("#evSearch").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); render(); }, 200); };
   $("#evList").onclick = e => handleCardClick(e);
   $("#evAdd").onclick = () => openAddEvent();
+  $("#evWebPaste").onclick = async () => {
+    try { const t = (await navigator.clipboard.readText()).trim(); if (t) { $("#evWebIn").value = t; readWeb(); } else toast("コピーした内容がありません"); }
+    catch { toast("貼り付けできませんでした。入力欄を長押しして貼り付けてください"); $("#evWebIn").focus(); }
+  };
+  $("#evWebRead").onclick = () => readWeb();
+  $("#evWebIn").onkeydown = e => { if (e.key === "Enter") readWeb(); };
+}
+
+let reading = false;
+async function readWeb() {
+  const v = $("#evWebIn").value.trim(), msg = $("#evWebMsg");
+  if (!v) { toast("公式ページのURLか文章を入れてください"); $("#evWebIn").focus(); return; }
+  if (reading) return; reading = true;
+  const url = (v.match(/https?:\/\/[^\s<>"'）)]+/) || [])[0];
+  const onlyUrl = url && v.replace(url, "").trim().length < 20;
+  msg.innerHTML = `<span class="spinner"></span>${onlyUrl ? "ページを開いて読み取っています…（10〜30秒）" : "読み取っています…"}`;
+  try {
+    const r = onlyUrl ? await ai.extractEventFromUrl({ url, hint: q, todayStr: today() })
+                      : await ai.extractEvent({ text: v, todayStr: today() });
+    if (!r || !r.found || !r.title) { msg.textContent = onlyUrl ? "このページから展覧会の情報を読み取れませんでした。ページの文章をコピーして貼ると読み取れることがあります。" : "展覧会の情報を読み取れませんでした。"; return; }
+    if (url && !r.url) r.url = url;
+    msg.textContent = "";
+    $("#evWebIn").value = "";
+    openAddEvent(null, r);
+  } catch (e) { msg.textContent = e.message; }
+  finally { reading = false; }
 }
 export { expand };

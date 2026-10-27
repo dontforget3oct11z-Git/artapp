@@ -158,6 +158,20 @@ export const EVENT_SCHEMA = {
     url: { type: "string" }, summary: { type: "string" }, found: { type: "boolean" },
   },
 };
+// The official page of an exhibition, read by the AI from its URL.
+export function eventUrlPrompt({ url, hint, todayStr }) {
+  return `今日は${todayStr}です。次のWebページを開いて、載っている展覧会の情報を取り出してください。
+${url}
+${hint ? `探している展覧会：「${hint}」（ページに複数の展覧会があれば、これに当たるものを選ぶ）\n` : ""}ページに書かれていないことは作らず、空文字にしてください。
+次の形のJSONだけを返してください（前後に説明を書かない）：
+{"title":"","venue":"","start":"","end":"","url":"","summary":"","found":true}
+- title：展覧会名（ページに書かれているとおり）
+- venue：会場の美術館名
+- start / end：会期を YYYY-MM-DD で。年が書かれていなければ、今日から見て自然な年にする。
+- url：その展覧会のページのURL（わからなければ上のURL）
+- summary：どんな展覧会か1〜2文（ページの内容から）
+- found：ページを開けて展覧会の情報が読み取れたら true。開けない・展覧会の情報がなければ false`;
+}
 export function eventPrompt({ hasImage, text, todayStr }) {
   return `今日は${todayStr}です。${hasImage ? "写真は展覧会のチラシ・ポスター・看板などです。" : ""}${text ? `次の文章は展覧会の案内です。\n---\n${text.slice(0, 12000)}\n---\n` : ""}
 書かれている展覧会の情報を取り出してください。書かれていないことは作らず、空文字にしてください。
