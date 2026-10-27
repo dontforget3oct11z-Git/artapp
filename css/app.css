@@ -259,7 +259,7 @@ details summary{cursor:pointer;color:var(--muted)}
 .bulk{display:flex;flex-direction:column;gap:6px}
 .bk{display:flex;gap:10px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:6px}
 .bk img{width:48px;height:48px;object-fit:cover;border-radius:2px;flex:none;background:var(--chip)}
-.bk.done b,.bk.label b{color:var(--ok)}
+.bk.done b,.bk.label b,.bk.merged b{color:var(--ok)}
 .bk.review b{color:var(--warn)}
 .bk.err b{color:var(--bad)}
 .bk.dup{opacity:.55}
@@ -368,7 +368,7 @@ details.pref[open] summary h3::before{content:"−"}
 .bk .bkb{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .bkbar{height:4px;border-radius:4px;background:var(--chip);overflow:hidden}
 .bkbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:4px;transition:width .9s linear}
-.bk.done .bkbar i,.bk.label .bkbar i{background:var(--ok)}
+.bk.done .bkbar i,.bk.label .bkbar i,.bk.merged .bkbar i{background:var(--ok)}
 .bk.review .bkbar i{background:var(--warn)}
 .bk.err .bkbar i{background:var(--bad)}
 .bk.wait .bkbar{opacity:.5}
@@ -428,3 +428,16 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 .excard .acts{flex-wrap:nowrap;gap:6px}
 .excard .acts .btn{padding-left:10px;padding-right:10px;white-space:nowrap}
 .excard .acts [data-act="more"]{margin-left:auto}
+
+/* several photos of one work */
+.photos{display:flex;flex-direction:column;gap:6px;min-width:0}
+.carousel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;border-radius:var(--r);outline:none}
+.carousel::-webkit-scrollbar{display:none}
+.carousel .slide{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always}
+.ph-bar{display:flex;align-items:center;gap:8px;min-height:32px}
+.ph-bar .grow{flex:1}
+.dots{display:inline-flex;gap:5px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--ink)}
+.ph-acts{justify-content:flex-end}
+.ph-count{position:absolute;right:6px;bottom:6px;font-size:11px;font-weight:600;padding:2px 6px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff}

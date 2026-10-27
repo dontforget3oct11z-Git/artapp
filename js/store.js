@@ -64,7 +64,9 @@ export async function save(name, rec) {
   return r;
 }
 export async function remove(name, id) {
-  await tx(name, "readwrite", s => { s.put({ id, deleted: true, updatedAt: Date.now(), _dirty: 1 }); });
+  const old = await get(name, id).catch(() => null);
+  // a work keeps its photo list, so sync can also delete the extra photos in the shared space
+  await tx(name, "readwrite", s => { s.put({ id, deleted: true, updatedAt: Date.now(), _dirty: 1, ...(old?.photos?.length ? { photos: old.photos } : {}) }); });
   emit(name, true);
 }
 // A change that came from the shared space: keep its updatedAt and don't upload it again.
@@ -125,7 +127,7 @@ export async function exportJson() {
   for (const w of works) {
     const c = { ...w };
     delete c._dirty;
-    for (const k of BLOB_KEYS) if (c[k] instanceof Blob) c[k] = await blobToDataUrl(c[k]);
+    for (const k of [...BLOB_KEYS, ...(c.photos || [])]) if (c[k] instanceof Blob) c[k] = await blobToDataUrl(c[k]);
     out.push(c);
   }
   const extra = {};
@@ -140,7 +142,7 @@ export async function importJson(text) {
   for (const w of data.works) {
     if (!w?.id) continue;
     const c = { ...w };
-    for (const k of BLOB_KEYS) if (typeof c[k] === "string" && c[k].startsWith("data:")) c[k] = await dataUrlToBlob(c[k]);
+    for (const k of [...BLOB_KEYS, ...(c.photos || [])]) if (typeof c[k] === "string" && c[k].startsWith("data:")) c[k] = await dataUrlToBlob(c[k]);
     await save("works", c);
     n++;
   }

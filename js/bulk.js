@@ -8,6 +8,7 @@ import * as store from "./store.js";
 import * as ai from "./ai.js";
 import * as sync from "./sync.js";
 import * as P from "./places.js";
+import * as Ph from "./photos.js";
 import { $, esc, toast, openSheet, closeSheet, app, loadImg, toBlob, photoMeta, reverseGeocode, ymd } from "./ui.js";
 
 const PAIR_MS = 5 * 60 * 1000;
@@ -39,7 +40,7 @@ const STAGES = {
   check: { t: "Wikipediaで内容を確認中", p: 85 },
   save:  { t: "保存しています", p: 95 },
 };
-const DONE = { done: "登録しました", review: "登録しました（内容の確認をおすすめ）", label: "前の作品のラベルとしてまとめました", err: "登録できませんでした", dup: "登録済みのため飛ばしました" };
+const DONE = { merged: "同じ作品に写真を追加しました", done: "登録しました", review: "登録しました（内容の確認をおすすめ）", label: "前の作品のラベルとしてまとめました", err: "登録できませんでした", dup: "登録済みのため飛ばしました" };
 
 const pending = () => q.filter(x => x.state === "wait" || x.state === "work");
 const pausedUntil = () => +lsGet("artscan.bulkPause") || 0;
@@ -197,6 +198,16 @@ async function processOne(it) {
     await setStage(it, "save");
     const w = app.merge(r, v);
     delete w.alternatives; delete w.manual; delete w.photoKind;
+    // the same work is already in the collection (another angle, or the other person's photo): add the photo there
+    if (!isLabel) {
+      const same = Ph.findSame(await store.list("works"), w);
+      if (same) {
+        const t = { ...same };
+        if (sync.myName() && sync.myName() !== t.byName && !(t.alsoBy || []).includes(sync.myName())) t.alsoBy = [...(t.alsoBy || []), sync.myName()];
+        const saved = await Ph.addPhotos(t, [await toBlob(img, 1600, .84)]);
+        return finish(it, "merged", { title: saved.title, workId: saved.id, isLabel: false });
+      }
+    }
     w.id = "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     if (isLabel) w.labelImage = await toBlob(img, 1400, .8); else w.image = await toBlob(img, 1600, .84);
     w.thumb = await toBlob(img, 520, .76);
@@ -287,7 +298,7 @@ function itemLeft(it) { // seconds left for this photo
 }
 function summary() {
   const all = q, wait = all.filter(x => x.state === "wait"), work = all.find(x => x.state === "work");
-  const done = all.filter(x => ["done", "review", "label"].includes(x.state)).length, err = all.filter(x => x.state === "err").length;
+  const done = all.filter(x => ["done", "review", "label", "merged"].includes(x.state)).length, err = all.filter(x => x.state === "err").length;
   const total = all.length;
   const left = (work ? itemLeft(work) : 0) + wait.length * avgSec();
   return { total, wait: wait.length, work, done, err, left, pct: total ? Math.round(((done + err) * 100 + (work ? itemPct(work) : 0)) / total) : 0 };

@@ -7,6 +7,7 @@ import * as museumsTab from "./museums.js";
 import * as calendarTab from "./calendar.js";
 import * as eventsTab from "./events.js";
 import * as bulk from "./bulk.js";
+import * as Ph from "./photos.js";
 import { $, esc, today, toast, openSheet, closeSheet, onSheetClose, app, loadImg, toBlob, reverseGeocode, photoMeta, dist } from "./ui.js";
 const yen = usd => { const y = usd * ai.USD_JPY; return "¥" + (y < 10 ? y.toFixed(1) : Math.round(y).toLocaleString("ja-JP")); };
 
@@ -230,6 +231,7 @@ function showResult(r, cost, used, note) {
   const box = $("#result"); box.hidden = false;
   const canEscalate = used && ai.canEscalate(used.provider, used.model);
   const unsure = r.confidence && r.confidence !== "high";
+  const dup = Ph.findSame(works, r);
   box.innerHTML = `<div class="box">
     <div class="row" style="justify-content:space-between"><h3>${r.title ? esc(r.title) : "作品情報"}</h3>${confHtml(r.confidence)}</div>
     ${r.alternatives.length ? `<div class="small muted">他の候補：${r.alternatives.map(esc).join(" / ")}</div>` : ""}
@@ -241,8 +243,24 @@ function showResult(r, cost, used, note) {
       <span class="small${unsure ? "" : " muted"}">${unsure ? "AIの自信が低めです。高精度モード（Claude Opus）で調べ直せます。" : "結果が違うときは、高精度モード（Claude Opus）で調べ直せます。"}<br><span class="muted">有料：1回 約10円</span></span>
       <button class="btn ${unsure ? "primary" : "ghost"} small" id="btnPrecise">高精度で再識別</button></div>` : ""}
     ${formHtml(r, "new")}
-    <div class="row"><button class="btn primary" id="btnSave">コレクションに保存</button><button class="btn ghost" id="btnDiscard">やり直す</button></div>
+    ${dup ? `<div class="status small">この作品はコレクションにあります${dup.byName ? `（登録：${esc(dup.byName)}）` : ""}。写真をその作品に追加すると、1つの作品で写真をめくって見られます。</div>` : ""}
+    <div class="row">${dup ? `<button class="btn primary" id="btnAddTo">「${esc(dup.title)}」に写真を追加</button><button class="btn" id="btnSave">別の作品として保存</button>` : `<button class="btn primary" id="btnSave">コレクションに保存</button>`}<button class="btn ghost" id="btnDiscard">やり直す</button></div>
   </div>`;
+  if ($("#btnAddTo")) $("#btnAddTo").onclick = async () => {
+    $("#btnAddTo").disabled = true;
+    try {
+      const blobs = [];
+      if (shots.art) blobs.push(await toBlob(shots.art.img, 1600, .84));
+      let t = stripUrls(dup);
+      if (shots.label && !t.labelImage) { t.labelImage = await toBlob(shots.label.img, 1400, .8); t.blobsUp = (t.blobsUp || []).filter(k => k !== "labelImage"); }
+      const r2 = readForm("new", r);
+      if (!t.labelText && r2.labelText) t.labelText = r2.labelText;
+      if (!(t.alsoBy || []).includes(sync.myName()) && sync.myName() && sync.myName() !== t.byName) t.alsoBy = [...(t.alsoBy || []), sync.myName()];
+      await Ph.addPhotos(t, blobs);
+      toast("写真を追加しました");
+      resetScan(); await reload(); go("collection"); openDetail(dup.id);
+    } catch (e) { toast("追加できませんでした：" + (e?.message || "")); $("#btnAddTo").disabled = false; }
+  };
   $("#btnSave").onclick = async () => {
     const w = readForm("new", r);
     if (!w.title && !w.artist) { toast("作品名か作家を入れてください"); return; }
@@ -282,7 +300,7 @@ function groupValues(list) {
 }
 function cardHtml(w) {
   return `<button class="work" data-id="${esc(w.id)}">
-    <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="${esc(w.title)}" loading="lazy">` : ""}${w.sample ? `<span class="badge">サンプル</span>` : w.needsReview ? `<span class="badge review">要確認</span>` : ""}${w.fav ? `<span class="fav-mark" aria-label="お気に入り">♥</span>` : ""}</div>
+    <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="${esc(w.title)}" loading="lazy">` : ""}${w.sample ? `<span class="badge">サンプル</span>` : w.needsReview ? `<span class="badge review">要確認</span>` : ""}${w.fav ? `<span class="fav-mark" aria-label="お気に入り">♥</span>` : ""}${!w.sample && Ph.count(w) > 1 ? `<span class="ph-count" aria-label="写真${Ph.count(w)}枚">▣ ${Ph.count(w)}</span>` : ""}</div>
     <div class="label"><div class="artist">${esc(w.artist || "作家不明")}</div><div class="title">${esc(w.title || "無題")}${w.year ? `、${esc(w.year)}` : ""}</div><div class="meta">${esc(w.museum || "")}</div></div>
   </button>`;
 }
@@ -321,6 +339,54 @@ $("#wall").onclick = e => { const b = e.target.closest(".work"); if (b) openDeta
 let askAbort = null;
 onSheetClose(() => askAbort?.abort());
 
+// Photos of a work: swipe sideways (main photo first). Add more, remove one, or make one the main photo.
+function photosHtml(w) {
+  const keys = w.sample ? [] : Ph.keysOf(w);
+  if (keys.length <= 1) return `<div class="photos"><div class="frame">${imageOf(w) ? `<img src="${imageOf(w)}" alt="${esc(w.title)}">` : ""}</div>
+    ${w.sample ? "" : `<div class="ph-bar"><label class="btn small ghost" for="dAddPh">＋ 写真を追加</label><input id="dAddPh" type="file" accept="image/*" multiple hidden></div>`}</div>`;
+  return `<div class="photos">
+    <div class="carousel" id="dCar" tabindex="0" aria-label="作品の写真 ${keys.length}枚">${keys.map((k, i) => `<div class="slide" data-k="${esc(k)}"><div class="frame"><img src="${urlFor(w[k])}" alt="${esc(w.title)}（${i + 1}/${keys.length}）" ${i ? 'loading="lazy"' : ""}></div></div>`).join("")}</div>
+    <div class="ph-bar"><span class="dots" id="dDots">${keys.map((k, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</span><span class="small muted mono" id="dPhN">1 / ${keys.length}</span>
+      <span class="grow"></span><label class="btn small ghost" for="dAddPh">＋ 追加</label><input id="dAddPh" type="file" accept="image/*" multiple hidden>
+      <button class="btn small ghost" id="dPhMore" aria-label="この写真の操作">…</button></div>
+    <div class="row ph-acts" id="dPhActs" hidden><button class="btn small" id="dPhMain">この写真を最初にする</button><button class="btn small ghost danger" id="dPhDel">この写真を削除</button></div></div>`;
+}
+function bindPhotos(w) {
+  if (w.sample) return;
+  const keys = Ph.keysOf(w);
+  let cur = 0;
+  const car = $("#dCar");
+  if (car) {
+    car.onscroll = () => {
+      const i = Math.round(car.scrollLeft / car.clientWidth);
+      if (i === cur) return; cur = i;
+      $("#dDots").querySelectorAll("i").forEach((d, j) => d.classList.toggle("on", j === i));
+      $("#dPhN").textContent = `${i + 1} / ${keys.length}`;
+      $("#dPhMain").disabled = i === 0;
+    };
+    $("#dPhMain").disabled = true;
+    $("#dPhMore").onclick = () => { $("#dPhActs").hidden = !$("#dPhActs").hidden; };
+    $("#dPhMain").onclick = async () => { await Ph.makeMain(w, keys[cur]); await reload(); openDetail(w.id); toast("最初の写真にしました"); };
+    $("#dPhDel").onclick = async () => {
+      if (!confirm(`${cur + 1}枚目の写真を削除しますか？`)) return;
+      await Ph.removePhoto(w, keys[cur]); await reload(); openDetail(w.id); toast("写真を削除しました");
+    };
+  }
+  $("#dAddPh").onchange = async e => {
+    const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+    toast("写真を追加しています…");
+    await Ph.addPhotos(stripUrls(w), await Ph.filesToBlobs(files));
+    await reload(); openDetail(w.id); toast(`${files.length}枚の写真を追加しました`);
+  };
+  if ($("#dMerge")) $("#dMerge").onclick = async () => {
+    const others = Ph.sameAs(works, w);
+    if (!confirm(`同じ作品の${others.length}件を、この作品にまとめます。写真・ラベル・メモは残り、ほかの記録は消えます。よろしいですか？`)) return;
+    let t = stripUrls(w);
+    for (const o of others) t = await Ph.merge(t, o);
+    await reload(); openDetail(w.id); toast("1つにまとめました");
+  };
+}
+
 function openDetail(id) {
   const w = findWork(id); if (!w) return;
   const sr = w.src || {};
@@ -330,7 +396,7 @@ function openDetail(id) {
   openSheet(`<div class="bar"><button class="btn ghost" id="dClose">← 戻る</button>
       <div class="row">${w.sample ? "" : `<button class="btn ghost small" id="dFav" aria-pressed="${!!w.fav}">${w.fav ? "♥ お気に入り" : "♡ お気に入り"}</button><button class="btn ghost small" id="dShare">共有</button><button class="btn ghost small" id="dEdit">編集</button>`}</div></div>
     <div class="hero">
-      <div class="frame">${imageOf(w) ? `<img src="${imageOf(w)}" alt="${esc(w.title)}">` : ""}</div>
+      ${photosHtml(w)}
       <div class="plaque">
         ${w.sample ? `<span class="small muted">サンプル</span>` : ""}
         <div class="artist">${esc(w.artist || "作家不明")}${w.artistReading ? ` <span class="small muted">${esc(w.artistReading)}</span>` : ""}${srcBadge(sr.artist)}</div>
@@ -339,7 +405,8 @@ function openDetail(id) {
         <dl>${meta.map(([k, v, so]) => `<dt>${k}</dt><dd>${esc(v)}${srcBadge(so)}</dd>`).join("")}</dl>
         ${w.sample ? "" : verifyBanner(w)}
         ${w.needsReview ? `<div class="verify warn small row" style="justify-content:space-between"><span>まとめて登録した作品です。AIの自信が低めなので、内容を確かめてください。</span><button class="btn small" id="dReviewed">確認しました</button></div>` : ""}
-        ${w.byName && sync.enabled() ? `<div class="small muted">登録：${esc(w.byName)}</div>` : ""}
+        ${w.byName && sync.enabled() ? `<div class="small muted">登録：${esc([w.byName, ...(w.alsoBy || [])].join("・"))}</div>` : ""}
+        ${!w.sample && Ph.sameAs(works, w).length ? `<div class="verify warn small row" style="justify-content:space-between"><span>同じ作品がほかに${Ph.sameAs(works, w).length}件あります（${esc(Ph.sameAs(works, w).map(x => x.byName || "").filter(Boolean).join("・") || "別の記録")}）。</span><button class="btn small" id="dMerge">1つにまとめる</button></div>` : ""}
         ${(w.tags || []).length ? `<div class="chips" style="flex-wrap:wrap">${w.tags.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>
     </div>
@@ -355,6 +422,7 @@ function openDetail(id) {
     </div>
     ${w.sample ? "" : `<div class="row" id="delRow"><button class="btn danger ghost" id="dDel">コレクションから削除</button></div>`}`);
   $("#dClose").onclick = () => closeSheet();
+  bindPhotos(w);
   if (!w.sample) {
     $("#dEdit").onclick = () => editDetail(w);
     $("#dFav").onclick = async () => { w.fav = !w.fav; await store.put(stripUrls(w)); await reload(); openDetail(w.id); };
@@ -394,7 +462,7 @@ const stripUrls = w => { const c = { ...w }; delete c.thumbUrl; delete c.imageUr
 async function share(w) {
   const text = `${w.artist}「${w.title}」${w.year ? `（${w.year}）` : ""}${w.museum ? `\n${w.museum}にて` : ""}${w.description ? `\n\n${w.description}` : ""}`;
   try {
-    const files = w.image ? [new File([w.image], "artwork.jpg", { type: "image/jpeg" })] : [];
+    const files = w.sample ? [] : Ph.keysOf(w).map((k, i) => new File([w[k]], `artwork-${i + 1}.jpg`, { type: "image/jpeg" }));
     if (navigator.canShare && files.length && navigator.canShare({ files })) await navigator.share({ title: w.title, text, files });
     else if (navigator.share) await navigator.share({ title: w.title, text });
     else { await navigator.clipboard.writeText(text); toast("作品の説明をコピーしました"); }

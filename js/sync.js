@@ -141,6 +141,9 @@ async function shrink(blob) {
 const toBytes = async blob => fb.Bytes.fromUint8Array(new Uint8Array(await blob.arrayBuffer()));
 const toBlob = (bytes, type) => new Blob([bytes.toUint8Array()], { type: type || "image/jpeg" });
 
+// Photo fields of a work that are uploaded as separate documents.
+const blobKeys = r => ["image", "labelImage", ...(Array.isArray(r.photos) ? r.photos.filter(k => /^x[a-z0-9]+$/.test(k)) : [])];
+
 // ---------- push ----------
 function clean(v) {
   if (v === undefined || typeof v === "function") return undefined;
@@ -156,13 +159,14 @@ async function pushOne(space, name, r) {
   const ref = fb.doc(col(space, name), r.id);
   if (r.deleted) {
     await fb.setDoc(ref, { id: r.id, deleted: true, updatedAt: r.updatedAt, by: uid, serverAt: fb.serverTimestamp() });
-    if (name === "works") for (const k of ["image", "labelImage"]) { try { await fb.deleteDoc(fb.doc(col(space, "blobs"), r.id + "__" + k)); } catch {} }
+    if (name === "works") for (const k of blobKeys(r)) { try { await fb.deleteDoc(fb.doc(col(space, "blobs"), r.id + "__" + k)); } catch {} }
     return null;
   }
   const doc = clean(r);
   let blobsUp = Array.isArray(r.blobsUp) ? [...r.blobsUp] : [];
   if (name === "works") {
-    for (const k of ["image", "labelImage"]) {
+    blobsUp = blobsUp.filter(k => k === "image" || k === "labelImage" || (r.photos || []).includes(k));
+    for (const k of blobKeys(r)) {
       if (!(r[k] instanceof Blob) || blobsUp.includes(k)) continue;
       const b = await shrink(r[k]);
       if (!b) continue;
@@ -223,8 +227,9 @@ async function applyOne(space, name, r) {
     delete rec.thumbBytes; delete rec.thumbType;
     if (r.thumbBytes) rec.thumb = toBlob(r.thumbBytes, r.thumbType);
     else if (local?.thumb) rec.thumb = local.thumb;
-    for (const k of ["image", "labelImage"]) {
-      if (local?.[k] instanceof Blob) { rec[k] = local[k]; continue; }
+    for (const k of blobKeys(r)) {
+      // keep our copy unless the photo was replaced on the other device
+      if (local?.[k] instanceof Blob && (local.blobAt?.[k] || 0) === (r.blobAt?.[k] || 0)) { rec[k] = local[k]; continue; }
       if (!(r.blobsUp || []).includes(k)) continue;
       try {
         const b = await fb.getDoc(fb.doc(col(space, "blobs"), r.id + "__" + k));
