@@ -808,6 +808,7 @@ const TABS = ["collection", "museums", "scan", "events", "calendar", "discover"]
 function go(tab) {
   TABS.forEach(t => { $("#v-" + t).hidden = t !== tab; });
   const navTab = tab === "scan" ? "collection" : tab;
+  $("#fabScan").hidden = tab === "scan";
   document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === navTab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   window.scrollTo(0, 0);
   if (tab === "museums") museumsTab.render();

@@ -490,11 +490,11 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 .wall.c3 .ph-count,.wall.c4 .ph-count{font-size:10px}
 .wall.c1 .frame{aspect-ratio:auto;max-height:80vh}
 .wall.c1 .frame img{height:auto;max-height:80vh;object-fit:contain}
-.fab-scan{position:fixed;z-index:19;right:max(16px,calc(50% - 480px + 16px));bottom:calc(env(safe-area-inset-bottom,0px) + 76px);
-  display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:12px 18px 12px 14px;
-  background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:14px;box-shadow:0 10px 24px -8px var(--shadow),0 0 0 3px var(--wall)}
-.fab-scan svg{width:22px;height:22px}
-#v-collection[hidden] .fab-scan{display:none}
+.fab-scan{position:fixed;z-index:19;right:max(18px,calc(50% - 480px + 18px));bottom:calc(env(safe-area-inset-bottom,0px) + 80px);
+  display:grid;place-items:center;width:60px;height:60px;border:0;border-radius:50%;padding:0;
+  background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px -8px var(--shadow),0 2px 6px -2px var(--shadow)}
+.fab-scan svg{width:28px;height:28px}
+.fab-scan[hidden]{display:none}
 #wall{padding-bottom:64px}
 .backlink{background:none;border:0;padding:0 0 6px;color:var(--muted);font-size:13px}
 #v-collection .vh h2,.vh-tools .btn{white-space:nowrap}
