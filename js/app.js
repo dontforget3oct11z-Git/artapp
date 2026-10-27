@@ -169,6 +169,7 @@ function normalize(d, museum) {
     lookFor: arr("lookFor"), labelText: s("labelText"), confidence: s("confidence"),
     alternatives: arr("alternatives").slice(0, 3), tags: arr("tags").slice(0, 8),
     basis: d.basis && typeof d.basis === "object" ? d.basis : {},
+    photoKind: s("photoKind"),
   };
 }
 const CONF = { high: ["high", "確度 高"], medium: ["mid", "確度 中"], low: ["low", "確度 低：内容を確認してください"] };

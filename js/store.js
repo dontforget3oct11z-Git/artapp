@@ -7,6 +7,7 @@
 //   marks    展示ごとの「行きたい／行った」と行く予定日
 //   events   自分で追加した展示
 //   meta     sync bookkeeping
+//   queue    photos waiting to be registered by js/bulk.js (this device only, never shared)
 // Every record carries updatedAt. Local changes set _dirty until they are uploaded.
 // Deleting leaves a small tombstone ({id, deleted: true}) so the delete reaches the other device.
 const DB_NAME = "artscan";
@@ -16,11 +17,11 @@ let dbp = null;
 function open() {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 2);
+    const req = indexedDB.open(DB_NAME, 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains("works")) db.createObjectStore("works", { keyPath: "id" }).createIndex("createdAt", "createdAt");
-      for (const s of ["museums", "marks", "events", "meta"]) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: "id" });
+      for (const s of ["museums", "marks", "events", "meta", "queue"]) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -146,3 +147,8 @@ export async function importJson(text) {
   for (const name of ["museums", "marks", "events"]) for (const r of data[name] || []) if (r?.id) await save(name, r);
   return n;
 }
+
+// ---- photo queue (local only) ----
+export const qAll = () => rawAll("queue");
+export const qPut = rec => tx("queue", "readwrite", s => { s.put(rec); return rec; });
+export const qDel = id => tx("queue", "readwrite", s => { s.delete(id); });

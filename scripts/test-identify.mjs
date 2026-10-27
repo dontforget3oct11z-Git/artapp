@@ -28,7 +28,7 @@ globalThis.fetch = async (url, opts) => {
 
 const models = (process.env.MODELS || "gemini-3.8-flash gemini-3.5-flash-lite").split(/\s+/).filter(Boolean);
 for (const [name, url] of IMAGES) {
-  const r = await realFetch(url, { headers: { "User-Agent": UA } });
+  console.log("download", name); const r = await realFetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) }).catch(e => ({ ok: false, status: e.name }));
   if (!r.ok) { console.log(name, "download HTTP", r.status); continue; }
   const blob = new Blob([await r.arrayBuffer()], { type: "image/jpeg" });
   for (const model of models) for (const unknown of [false, true]) {

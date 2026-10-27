@@ -48,9 +48,10 @@ export async function toBase64(blob) {
 export const WORK_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "originalTitle", "artist", "artistReading", "year", "medium", "dimensions", "movement", "museum",
+  required: ["photoKind", "title", "originalTitle", "artist", "artistReading", "year", "medium", "dimensions", "movement", "museum",
     "description", "artistNote", "lookFor", "labelText", "confidence", "alternatives", "tags", "basis"],
   properties: {
+    photoKind: { type: "string", enum: ["artwork", "label"] },
     title: { type: "string" },
     originalTitle: { type: "string" },
     artist: { type: "string" },
@@ -88,6 +89,7 @@ export const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員
 3. 写真の絵柄から作品を確実に特定できた場合だけ、あなたの知識。
 
 各項目の書き方：
+- photoKind: 1枚目の写真が作品そのもの（絵画・彫刻・工芸・写真作品など）なら artwork、作品の解説ラベル（キャプション）の文字が主なら label。
 - title: 日本語の定訳があれば日本語の作品名。原題は originalTitle に（同じなら空文字）。
 - artist: 作家名の日本語表記。artistReading: 原語表記（例：Claude Monet）。日本人作家なら読み仮名。
 - year / medium / dimensions / movement: ラベルにあればそれを使う。ラベルになければ、作品を確実に特定できた場合だけ記入し、それ以外は空文字。
@@ -104,7 +106,7 @@ export const SYSTEM_IDENTIFY = `あなたは経験豊富な美術館の学芸員
 作品を特定できない場合（現代作家の作品、個人蔵、写真が不鮮明など）は、title と artist を空文字にして confidence を low にし、候補があれば alternatives に入れてください。`;
 
 export function identifyText({ hasArt, hasLabel, museum, place, unknown }) {
-  const what = unknown ? "作品の写真か、作品の横の解説ラベル（キャプション）の写真のどちらかです。ラベルの写真なら、文字を labelText に書き起こし、ラベルの内容から作品カードを作り、tags の最初に「ラベル」と入れてください。"
+  const what = unknown ? "作品（絵画・彫刻など）の写真か、作品の横の解説ラベル（キャプション）の写真のどちらかです。作品だけの写真なら、絵柄から作品カードを作ってください（作品名がわからなければ空文字で構いません）。ラベルの写真なら、文字を labelText に書き起こし、ラベルの内容から作品カードを作ってください。"
     : hasArt && hasLabel ? "1枚目は作品、2枚目はその作品の解説ラベル（キャプション）の写真です。"
     : hasArt ? "作品の写真です。" : "作品の解説ラベル（キャプション）の写真です。";
   let ctx = "";

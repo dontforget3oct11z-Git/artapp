@@ -58,20 +58,31 @@ function checkBlocked(data) {
 }
 const textOf = data => (data?.candidates?.[0]?.content?.parts || []).filter(p => typeof p.text === "string" && !p.thought).map(p => p.text).join("");
 
+// Never wait forever for an answer (a stuck request looked like an endless "調べています").
+const TIMEOUT_MS = 100000;
+function withTimeout(signal) {
+  if (typeof AbortSignal === "undefined" || !AbortSignal.timeout) return signal;
+  const t = AbortSignal.timeout(TIMEOUT_MS);
+  return signal && AbortSignal.any ? AbortSignal.any([signal, t]) : signal || t;
+}
+
 async function call(key, model, body, { kind, signal } = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/models/${model}:generateContent`, {
-      method: "POST", signal,
+      method: "POST", signal: withTimeout(signal),
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify(body),
     });
   } catch (e) {
+    if (e?.name === "TimeoutError") throw new AiError("timeout", "AIの応答に時間がかかりすぎました。もう一度試してください。");
     if (e?.name === "AbortError") throw new AiError("aborted", "中止しました。");
     throw new AiError("network", "インターネットにつながっていないようです。電波の良い場所で試してください。");
   }
   if (!res.ok) throw await errorFrom(res);
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); }
+  catch (e) { throw new AiError(e?.name === "TimeoutError" ? "timeout" : "network", "AIの応答を受け取れませんでした。もう一度試してください。"); }
   addUsage({ kind, free: true });
   checkBlocked(data);
   return data;
