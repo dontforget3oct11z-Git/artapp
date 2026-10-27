@@ -866,6 +866,23 @@ reload();
 renderSyncDot();
 sync.start();
 
+// A new version of the app: switch to it by itself, but only when nothing is in progress,
+// so a scan, a form or a sheet being filled in is never lost.
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  let pending = false, timer = null;
+  const busy = () => !$("#sheet").hidden || !$("#v-scan").hidden || selecting || bulk.isBusy() ||
+    document.activeElement?.matches?.("input,textarea,select");
+  const switchWhenIdle = () => {
+    if (!pending) return;
+    if (!busy()) { try { sessionStorage.setItem("artmuse.updated", "1"); } catch {} location.reload(); return; }
+    clearTimeout(timer); timer = setTimeout(switchWhenIdle, 3000);
+  };
+  let hadController = !!navigator.serviceWorker.controller; // the very first install is not an update
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !pending) { pending = true; switchWhenIdle(); } hadController = true; });
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  try { if (sessionStorage.getItem("artmuse.updated")) { sessionStorage.removeItem("artmuse.updated"); setTimeout(() => toast("新しい版になりました"), 600); } } catch {}
 }

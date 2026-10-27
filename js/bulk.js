@@ -48,6 +48,7 @@ const pausedUntil = () => +lsGet("artscan.bulkPause") || 0;
 const setPause = (until, why = "") => { lsSet("artscan.bulkPause", String(until)); lsSet("artscan.bulkPauseWhy", why); };
 
 // ---------- start up ----------
+export const isBusy = () => running;
 export async function init() {
   $("#inBulk").onchange = async e => {
     const files = [...e.target.files]; e.target.value = "";

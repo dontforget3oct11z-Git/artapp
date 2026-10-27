@@ -1,5 +1,5 @@
 // Offline support: keep the app itself and its libraries; never cache AI or map requests.
-const VERSION = "artmuse-v17";
+const VERSION = "artmuse-v18";
 const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/ai.js", "js/common.js", "js/gemini.js", "js/claude.js", "js/verify.js", "js/store.js", "js/ui.js", "js/sync.js", "js/places.js", "js/museums.js", "js/calendar.js", "js/events.js", "js/exfilter.js", "js/bulk.js", "js/photos.js", "js/museumpick.js", "data/museums.json", "data/museums-wikidata.json", "data/exhibitions.json", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "vendor/anthropic-sdk.js", "vendor/firebase.js", "vendor/exifr-lite.umd.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css"];
@@ -18,7 +18,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     // network first, so updates arrive; cache when offline
-    e.respondWith(fetch(req).then(res => {
+    // skip the browser's own short-term cache so a new version is picked up right away
+    e.respondWith(fetch(url.href, { cache: "no-cache", credentials: "same-origin" }).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
