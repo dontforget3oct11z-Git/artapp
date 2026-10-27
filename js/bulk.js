@@ -24,7 +24,7 @@ const urls = new Map(); // id -> object URL of the thumbnail
 
 // ---------- time estimates ----------
 // Average seconds per photo, learned from this device (starts from a typical value).
-const avgSec = () => +lsGet("artscan.bulkAvg." + (ai.isFree() ? "g" : "c")) || (ai.isFree() ? 18 : 14);
+const avgSec = () => +lsGet("artscan.bulkAvg." + (ai.isFree() ? "g" : "c")) || (ai.isFree() ? 12 : 14);
 function learn(sec) {
   if (!(sec > 1 && sec < 300)) return;
   lsSet("artscan.bulkAvg." + (ai.isFree() ? "g" : "c"), String(Math.round((avgSec() * 0.7 + sec * 0.3) * 10) / 10));
@@ -301,10 +301,16 @@ function statusLine(s) {
   return { text: `${s.done + s.err + 1}枚目を登録中（全${s.total}枚）・残り約${fmt(s.left)}` };
 }
 
+function waitEta(it) {
+  const pos = q.filter(x => x.state === "wait").findIndex(x => x.id === it.id);
+  const work = q.find(x => x.state === "work");
+  if (pos < 0 || !running) return "";
+  return `開始まであと約${fmt((work ? itemLeft(work) : 0) + pos * avgSec())}`;
+}
 const itemHtml = it => {
   const st = it.state === "work" ? (STAGES[it.stage] || STAGES.wait).t : it.state === "wait" ? (it.msg || "待機中") : DONE[it.state] || "";
   const pct = itemPct(it);
-  const eta = it.state === "work" ? `あと約${fmt(itemLeft(it))}` : it.state === "wait" ? `${q.filter(x => x.state === "wait").indexOf(it) + 1}番目` : "";
+  const eta = it.state === "work" ? `あと約${fmt(itemLeft(it))}` : it.state === "wait" ? waitEta(it) : "";
   return `<div class="bk ${it.state === "work" ? "busy" : it.state}" id="bq-${it.id}" ${it.workId && !it.isLabel ? `data-work="${esc(it.workId)}"` : ""}>
     <img alt="" data-q="${esc(it.id)}"><div class="bkb">
     <div class="small"><b>${esc(st)}</b>${it.title ? ` ${esc(it.title)}` : ""}</div>

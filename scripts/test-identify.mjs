@@ -7,7 +7,8 @@ if (!key) { console.log("GEMINI_API_KEY がありません"); process.exit(1); }
 const UA = "ArtMuseBot/1.0 (test; https://github.com/dontforget3oct11z-Git/artapp)";
 const IMAGES = [
   ["painting", "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg"],
-  ["sculpture", "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Mus%C3%A9e_Rodin_1.jpg/960px-Mus%C3%A9e_Rodin_1.jpg"],
+  ["sculpture", "wiki:The_Thinker"],
+  ["sculpture2", "wiki:Venus_de_Milo"],
   ["japanese", "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Tsunami_by_hokusai_19th_century.jpg/1280px-Tsunami_by_hokusai_19th_century.jpg"],
 ];
 
@@ -27,8 +28,9 @@ globalThis.fetch = async (url, opts) => {
 };
 
 const models = (process.env.MODELS || "gemini-3.8-flash gemini-3.5-flash-lite").split(/\s+/).filter(Boolean);
-for (const [name, url] of IMAGES) {
-  console.log("download", name); const r = await realFetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) }).catch(e => ({ ok: false, status: e.name }));
+for (let [name, url] of IMAGES) {
+  console.log("download", name);
+  if (url.startsWith("wiki:")) url = (await (await realFetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + url.slice(5), { headers: { "User-Agent": UA } })).json()).thumbnail?.source?.replace(/\/\d+px-/, "/960px-") || ""; const r = await realFetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) }).catch(e => ({ ok: false, status: e.name }));
   if (!r.ok) { console.log(name, "download HTTP", r.status); continue; }
   const blob = new Blob([await r.arrayBuffer()], { type: "image/jpeg" });
   for (const model of models) for (const unknown of [false, true]) {

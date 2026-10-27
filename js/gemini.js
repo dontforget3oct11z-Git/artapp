@@ -6,11 +6,13 @@ import { AiError, addUsage, parseJson, toBase64, WORK_SCHEMA, PICKS_SCHEMA, SYST
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 export const MODELS = {
-  "gemini-3.8-flash":      { name: "Gemini 3.8 Flash（無料・高精度）" },
-  "gemini-3.5-flash-lite": { name: "Gemini 3.5 Flash-Lite（無料・軽量）" },
+  "gemini-3.5-flash-lite": { name: "Gemini 3.5 Flash-Lite（無料・速い・おすすめ）" },
+  "gemini-3.8-flash":      { name: "Gemini 3.8 Flash（無料・混雑時は遅い）" },
 };
-export const DEFAULT_MODEL = "gemini-3.8-flash";
-// When the free daily quota of the main model runs out, try the lighter one.
+// Flash-Lite answers in a few seconds; 3.8 Flash is often overloaded on the free tier
+// (busy errors, or no answer for minutes), which showed up as read errors.
+export const DEFAULT_MODEL = "gemini-3.5-flash-lite";
+// When the chosen model is busy, slow or out of free quota, try this one.
 const BACKUP_MODEL = "gemini-3.5-flash-lite";
 
 // Paintings often include nudes or violent scenes; only block clearly harmful output.
@@ -59,18 +61,17 @@ function checkBlocked(data) {
 const textOf = data => (data?.candidates?.[0]?.content?.parts || []).filter(p => typeof p.text === "string" && !p.thought).map(p => p.text).join("");
 
 // Never wait forever for an answer (a stuck request looked like an endless "調べています").
-const TIMEOUT_MS = 100000;
-function withTimeout(signal) {
+function withTimeout(signal, ms) {
   if (typeof AbortSignal === "undefined" || !AbortSignal.timeout) return signal;
-  const t = AbortSignal.timeout(TIMEOUT_MS);
+  const t = AbortSignal.timeout(ms);
   return signal && AbortSignal.any ? AbortSignal.any([signal, t]) : signal || t;
 }
 
-async function call(key, model, body, { kind, signal } = {}) {
+async function call(key, model, body, { kind, signal, timeoutMs = 90000 } = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/models/${model}:generateContent`, {
-      method: "POST", signal: withTimeout(signal),
+      method: "POST", signal: withTimeout(signal, timeoutMs),
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify(body),
     });
@@ -88,11 +89,12 @@ async function call(key, model, body, { kind, signal } = {}) {
   return data;
 }
 
-// Try the chosen model; if its free quota is used up, fall back to the lighter one once.
-async function callWithBackup(key, model, body, opts) {
-  try { return { data: await call(key, model, body, opts), model }; }
+// Try the chosen model; if it is busy, too slow or out of free quota, use the backup model.
+async function callWithBackup(key, model, body, opts = {}) {
+  if (model === BACKUP_MODEL) return { data: await call(key, model, body, opts), model };
+  try { return { data: await call(key, model, body, { ...opts, timeoutMs: 45000 }), model }; }
   catch (e) {
-    if (e.code === "rate" && model !== BACKUP_MODEL) return { data: await call(key, BACKUP_MODEL, body, opts), model: BACKUP_MODEL };
+    if (["rate", "server", "timeout", "model"].includes(e.code)) return { data: await call(key, BACKUP_MODEL, body, opts), model: BACKUP_MODEL };
     throw e;
   }
 }
@@ -112,7 +114,7 @@ export async function identify({ key, model, art, label, museum, place, unknown 
   };
   const { data, model: used } = await callWithBackup(key, model, body, { kind: "scan" });
   const out = parseJson(textOf(data));
-  if (used !== model) out._note = "無料枠の都合で、軽量モデルで識別しました。";
+  if (used !== model) out._note = "選んだモデルが混み合っていたため、軽量モデルで識別しました。";
   return out;
 }
 

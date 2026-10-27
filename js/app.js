@@ -131,6 +131,24 @@ function status(msg, err, spin) {
   s.innerHTML = msg ? (spin ? '<span class="spinner"></span>' : "") + esc(msg) : "";
 }
 
+// If the phone paused the app (switched to another app) and the request broke, try again once
+// the app is shown again, instead of showing an error.
+async function keepTrying(fn) {
+  for (let n = 0; ; n++) {
+    let hidden = document.hidden;
+    const mark = () => { if (document.hidden) hidden = true; };
+    document.addEventListener("visibilitychange", mark);
+    try { return await fn(); }
+    catch (e) {
+      const broken = ["network", "timeout", "aborted"].includes(e.code) || (e.code === "json" && n === 0) || (e.code === "server" && n === 0);
+      if (!broken || n >= 2) throw e;
+      if (hidden || document.hidden) await new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener("visibilitychange", f); r(); } }; document.addEventListener("visibilitychange", f); f(); });
+      else if (e.code === "network") throw e;
+      status("もう一度調べています…", false, true);
+    } finally { document.removeEventListener("visibilitychange", mark); }
+  }
+}
+
 async function runIdentify(precise) {
   const btn = $("#btnIdentify"); btn.disabled = true;
   $("#result").hidden = true;
@@ -141,7 +159,7 @@ async function runIdentify(precise) {
     const label = shots.label ? await toBlob(shots.label.img, 1568, .88) : null;
     const museum = $("#inMuseum").value.trim();
     const args = { art, label, museum, place: geo?.place };
-    const res = precise ? await ai.identifyPrecise(args) : await ai.identify(args);
+    const res = await keepTrying(() => precise ? ai.identifyPrecise(args) : ai.identify(args));
     const cost = res.provider === "claude" ? ai.usage().usd - before : 0;
     const r = normalize(res.data, museum);
     let v = null;
