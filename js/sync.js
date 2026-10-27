@@ -265,6 +265,24 @@ export async function syncNow() {
   return running;
 }
 
+// For the settings screen: how many works are in the shared space and on this device.
+export async function stats() {
+  const c = readCfg(); if (!c?.space) return null;
+  if (!db) await connect(c.fb);
+  const all = (await fb.getCount(col(c.space, "works"))).data().count;
+  const gone = (await fb.getCount(fb.query(col(c.space, "works"), fb.where("deleted", "==", true)))).data().count;
+  const local = (await store.list("works")).length;
+  const waiting = (await store.dirty("works")).length;
+  return { remote: all - gone, local, waiting };
+}
+// Send everything on this device again and fetch everything from the shared space again.
+export async function resyncAll() {
+  const c = readCfg(); if (!c?.space) return;
+  for (const n of store.STORES) await store.markAllDirty(n);
+  c.since = {}; writeCfg(c);
+  await syncNow();
+}
+
 let debounce = null;
 export function start() {
   if (!enabled()) return;

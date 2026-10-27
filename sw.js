@@ -1,5 +1,5 @@
 // Offline support: keep the app itself and its libraries; never cache AI or map requests.
-const VERSION = "artmuse-v9";
+const VERSION = "artmuse-v10";
 const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/ai.js", "js/common.js", "js/gemini.js", "js/claude.js", "js/verify.js", "js/store.js", "js/ui.js", "js/sync.js", "js/places.js", "js/museums.js", "js/calendar.js", "js/events.js", "js/exfilter.js", "js/bulk.js", "data/museums.json", "data/museums-wikidata.json", "data/exhibitions.json", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "vendor/anthropic-sdk.js", "vendor/firebase.js", "vendor/exifr-lite.umd.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css"];

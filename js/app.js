@@ -528,6 +528,7 @@ $("#btnSettings").onclick = () => openSettings();
 
 /* ================= sharing ================= */
 const SETUP_URL = "https://github.com/dontforget3oct11z-Git/artapp#家族と共有する設定";
+let shStatsP = null, shStatsAt = 0;
 function renderShareBox(joinCode) {
   const box = $("#shareBox"); if (!box) return;
   const st = sync.state;
@@ -579,6 +580,7 @@ function renderShareBox(joinCode) {
   box.innerHTML = `<h3>家族と共有</h3>
     <div class="sync-line ${st.phase}">${st.phase === "syncing" ? '<span class="spinner"></span>同期しています…' : st.phase === "error" ? esc(st.error) : when ? `共有中・${when}に同期しました` : "共有中"}</div>
     ${names.length ? `<div class="small">メンバー：${names.map(esc).join("、")}</div>` : ""}
+    <div class="small" id="shStats"><span class="spinner"></span>作品の数を確かめています…</div>
     <div class="field"><label for="shMyName">あなたの名前</label><div class="row"><input id="shMyName" class="search" value="${esc(sync.myName())}"><button class="btn small" id="shRename">変更</button></div></div>
     <div class="field"><label>招待コード（相手のスマホの「招待コードで参加」に貼る）</label><div class="code mono small" id="shInvite">${esc(sync.inviteCode())}</div></div>
     <div class="row"><button class="btn primary" id="shSend">招待を送る</button><button class="btn" id="shCopy">コードをコピー</button><button class="btn ghost" id="shNow">今すぐ同期</button></div>
@@ -590,7 +592,14 @@ function renderShareBox(joinCode) {
     const text = `ArtMuseで作品の記録を共有しましょう。\n1. ${new URL("./", location.href).href} を開いてホーム画面に追加\n2. 設定 → 家族と共有 →「招待コードで参加」に次のコードを貼る\n\n${sync.inviteCode()}`;
     try { if (navigator.share) await navigator.share({ text }); else { await navigator.clipboard.writeText(text); toast("招待文をコピーしました"); } } catch {}
   };
-  $("#shNow").onclick = () => sync.syncNow();
+  $("#shNow").onclick = async () => { await sync.syncNow(); shStatsP = null; renderShareBox(); };
+  if (!shStatsP || Date.now() - shStatsAt > 20000) { shStatsAt = Date.now(); shStatsP = sync.stats(); }
+  shStatsP.then(st => {
+    const el = $("#shStats"); if (!el || !st) return;
+    el.innerHTML = `作品：共有スペースに${st.remote}点 ・ この端末に${st.local}点${st.waiting ? `（まだ送っていない${st.waiting}点）` : ""}
+      ${st.remote !== st.local || st.waiting ? `<div class="row"><button class="btn small" id="shResync">すべて送り直す・取り直す</button></div>` : ""}`;
+    if ($("#shResync")) $("#shResync").onclick = async () => { el.innerHTML = '<span class="spinner"></span>送り直しています…'; await sync.resyncAll(); await reload(); shStatsP = null; renderShareBox(); toast("送り直しました"); };
+  }).catch(e => { const el = $("#shStats"); if (el) el.textContent = "作品の数を確かめられませんでした（" + (e.code || e.message) + "）"; });
   $("#shLeave").onclick = () => {
     if (!confirm("この端末の共有をやめますか？この端末の作品は残ります。もう一度参加するには招待コードが必要です。")) return;
     sync.leave(); renderShareBox(); toast("共有をやめました");
