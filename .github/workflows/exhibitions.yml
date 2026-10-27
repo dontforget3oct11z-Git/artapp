@@ -16,6 +16,10 @@ on:
         description: "ページの中身を保存して確認する（開発用）"
         required: false
         default: "0"
+      images_only:
+        description: "展示のサムネイル画像だけ集める（1にする）"
+        required: false
+        default: "0"
 
 permissions:
   contents: write
@@ -27,7 +31,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,7 +41,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DEBUG_DUMP: ${{ github.event.inputs.debug }}
+        if: ${{ github.event.inputs.images_only != '1' }}
         run: node scripts/fetch-exhibitions.mjs ${{ github.event.inputs.museums }}
+      - name: 展示のサムネイル画像を集める
+        continue-on-error: true
+        timeout-minutes: 20
+        run: node scripts/fetch-exhibition-images.mjs
       - name: 確認用にページの中身を残す
         if: ${{ github.event.inputs.debug == '1' }}
         uses: actions/upload-artifact@v4
@@ -47,11 +56,11 @@ jobs:
           retention-days: 3
       - name: 変わっていれば保存する
         run: |
-          git add data/exhibitions.json data/exhibitions-state.json 2>/dev/null || true
+          git add data/exhibitions.json data/exhibitions-state.json data/exhibition-images.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/exhibitions.json data/exhibitions-state.json
+          git add data/exhibitions.json data/exhibitions-state.json data/exhibition-images.json 2>/dev/null || true
           git commit -m "展示情報を更新"
           git pull --rebase origin main
           git push

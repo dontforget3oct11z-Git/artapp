@@ -504,3 +504,14 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 html,body,button,a,input,select,textarea,label,.work,.slide{touch-action:manipulation}
 .evweb{display:flex;flex-direction:column;gap:10px}
 .evweb .row .search{flex:1 1 160px}
+/* exhibition cards: thumbnail */
+.excard .exhead{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.excard .exmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.exthumb{flex:none;width:76px;aspect-ratio:3/4;border-radius:6px;overflow:hidden;background:var(--chip);position:relative;cursor:pointer;display:grid;place-items:center}
+.exthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.exthumb span{display:none}
+.exthumb.none span{display:block;font-family:var(--f-display);font-weight:700;font-size:20px;color:var(--muted);opacity:.7;letter-spacing:.05em}
+.excard .exsum{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+@media (min-width:600px){.exthumb{width:96px}}
+#evAppPart{display:flex;flex-direction:column;gap:18px}
+#evAppPart[hidden]{display:none}

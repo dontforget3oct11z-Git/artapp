@@ -151,7 +151,7 @@ export function openMuseum(id) {
     ${statusButtons(m)}
     <div class="box ticketbox"><h3>🎫 チケット</h3>
       ${m.ticket ? `<div class="small"><b>購入済み</b>${m.ticket.day ? ` ・ 行く日 ${esc(jpDate(m.ticket.day))}` : ""}${m.ticket.note ? ` ・ ${esc(m.ticket.note)}` : ""}</div>` : `<div class="small muted">入館券・年間パスポートなどを買ったら記録できます。展覧会のチケットは「展示」タブの各展示から登録できます。</div>`}
-      <div class="grid2"><div class="field"><label for="msTkDay">行く日（任意）</label><input type="date" id="msTkDay" value="${esc(m.ticket?.day || "")}"></div>
+      <div class="grid2"><div class="field"><label for="msTkDay">行く日（決まっていなければ空のまま）</label><input type="date" id="msTkDay" value="${esc(m.ticket?.day || "")}"></div>
       <div class="field"><label for="msTkNote">メモ</label><input id="msTkNote" value="${esc(m.ticket?.note || "")}" placeholder="例：年パス・2026年12月まで"></div></div>
       <div class="row"><button class="btn small" id="msTkSave">${m.ticket ? "チケットの記録を更新" : "チケット購入済みにする"}</button>${m.ticket ? `<button class="btn small ghost danger" id="msTkDel">記録を消す</button>` : ""}</div></div>
     <div class="box"><h3>行った日</h3>

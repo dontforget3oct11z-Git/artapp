@@ -122,16 +122,19 @@
   <!-- 展示（期間限定の展示一覧） -->
   <section class="view" id="v-events" hidden>
     <div class="vh"><div><div class="eyebrow">Exhibitions</div><h2>期間限定の展示</h2></div><button class="btn small" id="evAdd">＋ 追加</button></div>
+    <div class="seg wide" id="evMode" role="group" aria-label="探す場所"><button data-m="app" aria-pressed="true">アプリ内で探す</button><button data-m="web" aria-pressed="false">ネットで探す</button></div>
     <div class="row"><input class="search" id="evSearch" type="search" placeholder="展覧会名・美術館・地名で探す" enterkeyhint="search"></div>
     <div class="box evweb" id="evWeb" hidden>
-      <div><b id="evWebTitle">アプリにない展示を登録する</b><div class="small muted">ネットで公式ページを探して、そのURLか文章を貼ると、AIが展覧会名と会期を読み取ります。内容を確かめてから保存できます。</div></div>
+      <div><b id="evWebTitle">アプリにない展示を登録する</b><div class="small muted" id="evWebHelp">ネットで公式ページを探して、そのURLか文章を貼ると、AIが展覧会名と会期を読み取ります。内容を確かめてから保存できます。</div></div>
       <div class="row"><a class="btn small" id="evWebSearch" target="_blank" rel="noopener">🔍 ネットで探す</a><button class="btn small ghost" id="evWebPaste" type="button">📋 コピーした内容を貼る</button></div>
       <div class="row"><input class="search" id="evWebIn" placeholder="公式ページのURL、または文章" enterkeyhint="go"><button class="btn primary small" id="evWebRead" type="button">読み取る</button></div>
       <div class="small muted" id="evWebMsg"></div>
     </div>
+    <div id="evAppPart" class="view-part">
     <div id="evFilterBox"></div>
     <div class="evcounts" id="evCounts"></div>
     <div class="exlist" id="evList"></div>
+    </div>
     <p class="small muted" id="evInfo" style="margin:0"></p>
   </section>
 

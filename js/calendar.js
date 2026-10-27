@@ -116,11 +116,13 @@ export function card(e) {
   const urgent = soon && daysBetween(today(), e.end) <= 7;
   const badge = soon ? ["まもなく終了", "soon"] : STATUS[st];
   return `<div class="excard${k.want ? " want" : ""}${k.went ? " went" : ""}${k.ticket ? " ticketed" : ""}${st === "ended" ? " ended" : ""}" data-ex="${esc(e.id)}">
+    <div class="exhead"><div class="exthumb${e.image ? "" : " none"}" data-act="more" aria-hidden="true">${e.image ? `<img src="${esc(e.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('none');this.remove()">` : ""}<span>${esc((e.venueName || e.title || "展").replace(/^(東京都|京都|大阪|国立|県立|市立|公益財団法人)/, "").slice(0, 2))}</span></div><div class="exmain">
     <div class="top"><span class="stbadge ${badge[1]}">${badge[0]}</span><span class="kind">${KIND[e.kind] || "展示"}</span>${k.ticket ? `<span class="tk">🎫 購入済み</span>` : ""}${k.went ? `<span class="tk went">✓ 行った</span>` : ""}<span class="left${urgent ? " urgent" : ""}">${remain(e)}</span></div>
     <div class="ttl">${esc(e.title)}</div>
     <div class="small muted">${esc(e.venueName || "")}${e.museum?.pref ? ` ・ ${esc(e.museum.pref)}` : e.museum?.country && e.area === "海外" ? ` ・ ${esc(e.museum.country)}` : ""}${e.venue ? ` ・ ${esc(e.venue)}` : ""}</div>
     <div class="small mono">${e.start ? esc(jpDate(e.start)) : ""}〜${e.end ? esc(jpDate(e.end)) : ""}</div>
-    ${e.summary ? `<div class="small">${esc(e.summary)}</div>` : ""}
+    ${e.summary ? `<div class="small exsum">${esc(e.summary)}</div>` : ""}
+    </div></div>
     ${k.plan || k.ticketNote ? `<div class="small plan-line">${k.plan ? `行く日：${esc(jpDate(k.plan))}` : ""}${k.plan && k.ticketNote ? " ・ " : ""}${k.ticketNote ? esc(k.ticketNote) : ""}</div>` : ""}
     <div class="row acts">
       <button class="btn small${k.want ? " on" : ""}" data-act="want" aria-pressed="${!!k.want}">${k.want ? "★ 行きたい" : "☆ 行きたい"}</button>
@@ -182,14 +184,16 @@ function openTicket(ex) {
   openSheet(`<div class="bar"><button class="btn ghost" id="tkClose">← 戻る</button></div>
     <h2>🎫 チケット購入済み</h2>
     <div class="box"><b>${esc(ex.title)}</b><div class="small muted">${esc(ex.venueName)} ・ ${esc(jpDate(ex.start))}〜${esc(jpDate(ex.end))}</div>
-      <div class="field"><label for="tkDay">行く日（日時指定のチケットなら、その日）</label><input type="date" id="tkDay" ${min ? `min="${min}"` : ""} ${ex.end ? `max="${ex.end}"` : ""} value="${esc(k.plan || "")}"></div>
+      <label class="check"><input type="checkbox" id="tkNoDay" ${k.plan ? "" : "checked"}><span>行く日はまだ決めていない</span></label>
+      <div class="field" id="tkDayBox" ${k.plan ? "" : "hidden"}><label for="tkDay">行く日（日時指定のチケットなら、その日）</label><input type="date" id="tkDay" ${min ? `min="${min}"` : ""} ${ex.end ? `max="${ex.end}"` : ""} value="${esc(k.plan || "")}"></div>
       <div class="field"><label for="tkNote">メモ（時間・枚数・購入先・引換番号など）</label><input id="tkNote" value="${esc(k.ticketNote || "")}" placeholder="例：14:00入場・2枚・ローチケ"></div>
       <div class="small muted">カレンダーに🎫で表示され、共有している相手にも出ます。</div>
       <div class="row"><button class="btn primary" id="tkSave">保存</button>${k.ticket ? `<button class="btn ghost danger" id="tkDel">チケットの記録を消す</button>` : ""}</div></div>`);
   $("#tkClose").onclick = () => closeSheet();
+  $("#tkNoDay").onchange = ev => { $("#tkDayBox").hidden = ev.target.checked; if (!ev.target.checked) $("#tkDay").focus(); };
   $("#tkSave").onclick = async () => {
-    const d = $("#tkDay").value;
-    await P.setMark(ex.id, { ticket: true, ticketNote: $("#tkNote").value.trim(), want: true, ...(d ? { plan: d } : {}) });
+    const d = $("#tkNoDay").checked ? "" : $("#tkDay").value;
+    await P.setMark(ex.id, { ticket: true, ticketNote: $("#tkNote").value.trim(), want: true, plan: d });
     closeSheet(); if (d) month = d.slice(0, 7); refresh(); toast("チケット購入済みにしました");
   };
   if ($("#tkDel")) $("#tkDel").onclick = async () => { await P.setMark(ex.id, { ticket: false, ticketNote: "" }); closeSheet(); refresh(); toast("チケットの記録を消しました"); };
@@ -268,7 +272,7 @@ export function openAddEvent(pre, draft) {
       <div class="field"><label for="aeUrl">公式ページのURL</label><input id="aeUrl" type="url" value="${esc(e.url)}" placeholder="https://"></div>
       <div class="field"><label for="aeSum">メモ</label><textarea id="aeSum" style="min-height:60px">${esc(e.summary)}</textarea></div>
       ${pre ? "" : `<label class="check"><input type="checkbox" id="aeTicket"><span>🎫 チケットを購入済み</span></label>
-      <div class="grid2" id="aeTkBox" hidden><div class="field"><label for="aeTkDay">行く日</label><input type="date" id="aeTkDay"></div>
+      <div class="grid2" id="aeTkBox" hidden><div class="field"><label for="aeTkDay">行く日（決まっていなければ空のまま）</label><input type="date" id="aeTkDay"></div>
       <div class="field"><label for="aeTkNote">チケットのメモ</label><input id="aeTkNote" placeholder="時間・枚数など"></div></div>`}
     </div>`);
   $("#aeClose").onclick = () => closeSheet();

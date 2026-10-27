@@ -7,7 +7,7 @@ import { $, esc, app, today, addDays, toast } from "./ui.js";
 import * as ai from "./ai.js";
 
 const DEFAULTS = { status: ["open", "upcoming"], kind: ["special", "collection", "other"], area: [], show: ["all"] };
-let fst = null, q = "";
+let fst = null, q = "", mode = "app";
 const norm = s => String(s || "").normalize("NFKC").toLowerCase();
 
 export function render() {
@@ -34,8 +34,19 @@ export function render() {
 
   const html = section("まもなく終了（2週間以内）", soon) + section("開催中", now) + section("開催前", upcoming) + section("終了した展示", ended);
   // not in the app? look it up outside and bring it in
-  $("#evWeb").hidden = !q;
-  if (q) {
+  const web = mode === "web";
+  document.querySelectorAll("#evMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === mode)));
+  $("#evAppPart").hidden = web;
+  $("#evSearch").placeholder = web ? "ネットで探す展覧会名（例：モネ展 東京）" : "展覧会名・美術館・地名で探す";
+  $("#evWeb").hidden = !q && !web;
+  $("#evWebSearch").hidden = web && !q;
+  if (web) {
+    $("#evWeb").style.order = "";
+    $("#evWebTitle").textContent = q ? `「${q}」をネットで探す` : "ネットで展示を探して登録";
+    $("#evWebHelp").textContent = q ? "「ネットで探す」で公式ページを開き、URLをコピーして下に貼ると、AIが展覧会名と会期を読み取ります。内容を確かめてから保存できます。" : "上の欄に展覧会名を入れて検索してください。公式ページのURLや文章がわかっていれば、下に直接貼っても読み取れます。";
+    if (q) $("#evWebSearch").href = "https://www.google.com/search?q=" + encodeURIComponent(`${q} 展覧会 会期`);
+  } else if (q) {
+    $("#evWebHelp").textContent = "ネットで公式ページを探して、そのURLか文章を貼ると、AIが展覧会名と会期を読み取ります。内容を確かめてから保存できます。";
     $("#evWeb").style.order = list.length ? "10" : ""; // below the results when there are some
     $("#evWebTitle").textContent = list.length ? `「${q}」が見つからないときは` : `「${q}」はアプリの一覧にありません`;
     $("#evWebSearch").href = "https://www.google.com/search?q=" + encodeURIComponent(`${q} 展覧会 会期`);
@@ -49,6 +60,9 @@ export function init() {
   $("#evFilterBox").innerHTML = F.html("evF", fst);
   F.bind($("#evF"), "ev", fst, DEFAULTS, () => render());
   let qt; $("#evSearch").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); render(); }, 200); };
+  // in "ネットで探す", Enter goes straight to the web search
+  $("#evSearch").onkeydown = e => { if (e.key === "Enter" && mode === "web" && e.target.value.trim()) { q = e.target.value.trim(); render(); window.open($("#evWebSearch").href, "_blank", "noopener"); } };
+  $("#evMode").onclick = e => { const b = e.target.closest("[data-m]"); if (!b || b.dataset.m === mode) return; mode = b.dataset.m; render(); $("#evSearch").focus(); };
   $("#evList").onclick = e => handleCardClick(e);
   $("#evAdd").onclick = () => openAddEvent();
   $("#evWebPaste").onclick = async () => {
