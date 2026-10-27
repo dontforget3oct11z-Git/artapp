@@ -34,7 +34,7 @@
 
   <!-- コレクション -->
   <section class="view" id="v-collection">
-    <div class="vh"><div><div class="eyebrow">Collection</div><h2>コレクション</h2></div></div>
+    <div class="vh"><div><div class="eyebrow">Collection</div><h2>コレクション</h2></div><button class="btn small" id="btnTidy">整理</button></div>
     <div class="toolbar">
       <input class="search" id="q" type="search" placeholder="作品名・作家・美術館・メモで検索" aria-label="検索">
       <select class="select" id="sort" aria-label="並び順">
@@ -52,6 +52,7 @@
     </div>
     <div class="chips" id="chips" aria-label="絞り込み"></div>
     <div id="sampleNote" class="status small" hidden>これはサンプルです。下の「スキャン」から最初の作品を撮影すると、ここがあなたのコレクションになります。</div>
+    <div class="selbar" id="selBar" hidden><span id="selN"></span><button class="btn small primary" id="selMerge" disabled>1つにまとめる</button><button class="btn small ghost" id="selCancel">やめる</button></div>
     <div class="wall" id="wall"></div>
   </section>
 

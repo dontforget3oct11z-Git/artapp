@@ -8,6 +8,7 @@ import * as calendarTab from "./calendar.js";
 import * as eventsTab from "./events.js";
 import * as bulk from "./bulk.js";
 import * as Ph from "./photos.js";
+import * as MP from "./museumpick.js";
 import { $, esc, today, toast, openSheet, closeSheet, onSheetClose, app, loadImg, toBlob, reverseGeocode, photoMeta, dist } from "./ui.js";
 const yen = usd => { const y = usd * ai.USD_JPY; return "¥" + (y < 10 ? y.toFixed(1) : Math.round(y).toLocaleString("ja-JP")); };
 
@@ -215,6 +216,9 @@ function formHtml(w, p) {
   <div class="field"><label for="${p}-labelText">ラベルの文字</label><textarea id="${p}-labelText" style="min-height:70px">${esc(w.labelText)}</textarea></div>
   <div class="field"><label for="${p}-note">メモ</label><textarea id="${p}-note" style="min-height:60px" placeholder="気づいたこと、感じたこと">${esc(w.note)}</textarea></div>`;
 }
+const usedMuseumNames = () => [...new Set(works.map(w => w.museum).filter(Boolean))];
+const pickMuseum = el => MP.attach(el, { extraNames: usedMuseumNames });
+
 function readForm(p, base) {
   const w = { ...base, src: { ...(base.src || {}) } };
   [...FIELDS.map(f => f[0]), "description", "labelText", "note"].forEach(k => {
@@ -223,6 +227,8 @@ function readForm(p, base) {
     if (v !== (base[k] || "") && ["title", "artist", "year", "medium", "dimensions", "museum"].includes(k)) w.src[k] = v ? "user" : "";
     w[k] = v;
   });
+  const mu = document.getElementById(p + "-museum");
+  if (mu && (mu.value.trim() !== (base.museum || "") || mu.dataset.mid)) w.museumId = mu.dataset.mid || P.museumIdFor({ museum: w.museum }) || "";
   const t = document.getElementById(p + "-tags"); if (t) w.tags = t.value.split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean);
   return w;
 }
@@ -273,7 +279,7 @@ function showResult(r, cost, used, note) {
       w.createdAt = Date.now();
       w.byName = sync.myName();
       if (geo) { w.lat = geo.lat; w.lng = geo.lng; w.place = geo.place || ""; }
-      w.museumId = P.museumIdFor(w) || "";
+      w.museumId = w.museumId || $("#inMuseum").dataset.mid && w.museum === $("#inMuseum").value.trim() && $("#inMuseum").dataset.mid || P.museumIdFor(w) || "";
       delete w.alternatives; delete w.manual;
       await store.put(w);
       store.persist();
@@ -284,6 +290,7 @@ function showResult(r, cost, used, note) {
     }
   };
   $("#btnDiscard").onclick = resetScan;
+  pickMuseum($("#new-museum"));
   if ($("#btnPrecise")) $("#btnPrecise").onclick = () => runIdentify(true);
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -299,7 +306,7 @@ function groupValues(list) {
   return [...new Set(list.map(w => w[group]).filter(Boolean))];
 }
 function cardHtml(w) {
-  return `<button class="work" data-id="${esc(w.id)}">
+  return `<button class="work${selecting && selected.has(w.id) ? " picked" : ""}" data-id="${esc(w.id)}" ${selecting ? `aria-pressed="${selected.has(w.id)}"` : ""}>${selecting && !w.sample ? `<span class="pick-mark">${selected.has(w.id) ? "✓" : ""}</span>` : ""}
     <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="${esc(w.title)}" loading="lazy">` : ""}${w.sample ? `<span class="badge">サンプル</span>` : w.needsReview ? `<span class="badge review">要確認</span>` : ""}${w.fav ? `<span class="fav-mark" aria-label="お気に入り">♥</span>` : ""}${!w.sample && Ph.count(w) > 1 ? `<span class="ph-count" aria-label="写真${Ph.count(w)}枚">▣ ${Ph.count(w)}</span>` : ""}</div>
     <div class="label"><div class="artist">${esc(w.artist || "作家不明")}</div><div class="title">${esc(w.title || "無題")}${w.year ? `、${esc(w.year)}` : ""}</div><div class="meta">${esc(w.museum || "")}</div></div>
   </button>`;
@@ -328,12 +335,95 @@ function render() {
   if (!$("#v-museums").hidden) museumsTab.render();
   if (!$("#v-calendar").hidden) calendarTab.render();
   if (!$("#v-events").hidden) eventsTab.render();
+  renderSelBar();
 }
 $("#q").oninput = render;
 $("#sort").onchange = render;
 $("#groupChips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; group = b.dataset.g; filterVal = ""; render(); };
 $("#chips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; filterVal = b.dataset.v; render(); };
-$("#wall").onclick = e => { const b = e.target.closest(".work"); if (b) openDetail(b.dataset.id); };
+$("#wall").onclick = e => {
+  const b = e.target.closest(".work"); if (!b) return;
+  if (!selecting) { openDetail(b.dataset.id); return; }
+  const id = b.dataset.id; if (!works.some(w => w.id === id)) return;
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  render();
+};
+
+/* ================= tidy: merge works you pick, unify museum names ================= */
+let selecting = false;
+const selected = new Set();
+function startSelect(firstId) {
+  selecting = true; selected.clear(); if (firstId) selected.add(firstId);
+  closeSheet(); go("collection"); render();
+  toast("まとめる作品を2つ以上タップしてください");
+}
+function stopSelect() { selecting = false; selected.clear(); render(); }
+function renderSelBar() {
+  $("#selBar").hidden = !selecting;
+  if (!selecting) return;
+  $("#selN").textContent = `${selected.size}件を選択中`;
+  $("#selMerge").disabled = selected.size < 2;
+}
+$("#selCancel").onclick = stopSelect;
+$("#selMerge").onclick = () => {
+  const list = works.filter(w => selected.has(w.id));
+  if (list.length < 2) return;
+  const best = [...list].sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || (b.title ? 1 : 0) - (a.title ? 1 : 0) || (a.createdAt || 0) - (b.createdAt || 0))[0];
+  openSheet(`<div class="bar"><button class="btn ghost" id="mgClose">← 戻る</button></div>
+    <h2>${list.length}件を1つにまとめる</h2>
+    <p class="small muted" style="margin:0">残す作品情報（作品名・作家・解説）を選んでください。ほかの作品の写真・ラベル・メモは、すべてこの作品に移ります。</p>
+    <div class="rec-list">${list.map(w => `<label class="rec merge-opt"><input type="radio" name="mgMain" value="${esc(w.id)}" ${w.id === best.id ? "checked" : ""}>
+      <span class="mthumb">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="">` : ""}</span>
+      <span><b>${esc(w.title || "無題")}</b><span class="small muted">${esc(w.artist || "作家不明")}${w.museum ? ` ・ ${esc(w.museum)}` : ""}${w.byName ? ` ・ 登録：${esc(w.byName)}` : ""} ・ 写真${Ph.count(w)}枚</span></span></label>`).join("")}</div>
+    <div class="row"><button class="btn primary" id="mgGo">まとめる</button></div>`);
+  $("#mgClose").onclick = () => closeSheet();
+  $("#mgGo").onclick = async () => {
+    const mainId = document.querySelector('input[name="mgMain"]:checked')?.value; if (!mainId) return;
+    $("#mgGo").disabled = true;
+    let t = stripUrls(works.find(w => w.id === mainId));
+    for (const o of list) if (o.id !== mainId) t = await Ph.merge(t, stripUrls(o));
+    selecting = false; selected.clear();
+    await reload(); openDetail(mainId); toast(`${list.length}件を1つにまとめました`);
+  };
+};
+
+$("#btnTidy").onclick = () => {
+  openSheet(`<div class="bar"><button class="btn ghost" id="tdClose">← 戻る</button></div>
+    <h2>コレクションの整理</h2>
+    <div class="box"><h3>作品を選んでまとめる</h3>
+      <p class="small muted" style="margin:0">同じ作品が別々に登録されたとき、選んで1つにできます。写真は横にめくって見られるようになります。</p>
+      <div class="row"><button class="btn" id="tdSelect">作品を選ぶ</button></div></div>
+    <div class="box"><h3>美術館名をそろえる</h3>
+      <p class="small muted" style="margin:0">同じ美術館が違う名前で登録されているとき、一覧の正式名にそろえます。名前を入れると候補が出ます。</p>
+      <div id="tdMuseums" class="rec-list"></div></div>`);
+  $("#tdClose").onclick = () => closeSheet();
+  $("#tdSelect").onclick = () => startSelect();
+  renderMuseumNames();
+};
+function renderMuseumNames() {
+  const counts = new Map();
+  for (const w of works) { const k = w.museum || ""; if (k) counts.set(k, (counts.get(k) || 0) + 1); }
+  const exact = new Set(P.allMuseums().map(m => m.name));
+  const names = [...counts.keys()].sort((a, b) => (exact.has(a) ? 1 : 0) - (exact.has(b) ? 1 : 0) || a.localeCompare(b, "ja"));
+  $("#tdMuseums").innerHTML = names.length ? names.map((n, i) => `<div class="rec">
+      <div class="row" style="justify-content:space-between"><b>${esc(n)}</b><span class="small muted">${counts.get(n)}点${exact.has(n) ? " ・ ✓ 一覧の名前" : ""}</span></div>
+      <div class="field"><input id="tdm${i}" data-from="${esc(n)}" placeholder="そろえる名前（例：国立西洋美術館）" value=""></div>
+      <div class="row"><button class="btn small" data-tdm="${i}">この名前にそろえる</button></div></div>`).join("")
+    : `<div class="small muted">美術館名が入った作品はまだありません。</div>`;
+  names.forEach((n, i) => pickMuseum($("#tdm" + i)));
+  $("#tdMuseums").onclick = async e => {
+    const b = e.target.closest("[data-tdm]"); if (!b) return;
+    const inp = $("#tdm" + b.dataset.tdm), from = inp.dataset.from, to = inp.value.trim();
+    if (!to) { toast("そろえる名前を入れてください"); return; }
+    const mid = inp.dataset.mid || P.museumIdFor({ museum: to }) || "";
+    let n = 0;
+    for (const w of works.filter(x => x.museum === from)) {
+      const c = stripUrls(w); c.museum = to; c.museumId = mid; c.src = { ...(c.src || {}), museum: "user" };
+      await store.put(c); n++;
+    }
+    await reload(); renderMuseumNames(); toast(`${n}点を「${to}」にそろえました`);
+  };
+}
 
 /* ================= detail ================= */
 let askAbort = null;
@@ -378,6 +468,7 @@ function bindPhotos(w) {
     await Ph.addPhotos(stripUrls(w), await Ph.filesToBlobs(files));
     await reload(); openDetail(w.id); toast(`${files.length}枚の写真を追加しました`);
   };
+  if ($("#dMergePick")) $("#dMergePick").onclick = () => startSelect(w.id);
   if ($("#dMerge")) $("#dMerge").onclick = async () => {
     const others = Ph.sameAs(works, w);
     if (!confirm(`同じ作品の${others.length}件を、この作品にまとめます。写真・ラベル・メモは残り、ほかの記録は消えます。よろしいですか？`)) return;
@@ -406,6 +497,7 @@ function openDetail(id) {
         ${w.sample ? "" : verifyBanner(w)}
         ${w.needsReview ? `<div class="verify warn small row" style="justify-content:space-between"><span>まとめて登録した作品です。AIの自信が低めなので、内容を確かめてください。</span><button class="btn small" id="dReviewed">確認しました</button></div>` : ""}
         ${w.byName && sync.enabled() ? `<div class="small muted">登録：${esc([w.byName, ...(w.alsoBy || [])].join("・"))}</div>` : ""}
+        ${!w.sample && !Ph.sameAs(works, w).length ? `<div class="small"><button class="linkbtn" id="dMergePick">ほかの作品とまとめる</button></div>` : ""}
         ${!w.sample && Ph.sameAs(works, w).length ? `<div class="verify warn small row" style="justify-content:space-between"><span>同じ作品がほかに${Ph.sameAs(works, w).length}件あります（${esc(Ph.sameAs(works, w).map(x => x.byName || "").filter(Boolean).join("・") || "別の記録")}）。</span><button class="btn small" id="dMerge">1つにまとめる</button></div>` : ""}
         ${(w.tags || []).length ? `<div class="chips" style="flex-wrap:wrap">${w.tags.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>
@@ -475,6 +567,7 @@ function editDetail(w) {
     <div class="field"><label for="ed-visited">訪問日</label><input id="ed-visited" type="date" value="${esc(w.visited)}"></div>
     ${formHtml(w, "ed")}`);
   $("#eCancel").onclick = () => openDetail(w.id);
+  pickMuseum($("#ed-museum"));
   $("#eSave").onclick = async () => {
     const n = readForm("ed", stripUrls(w)); n.visited = $("#ed-visited").value || w.visited;
     try { await store.put(n); await reload(); toast("保存しました"); openDetail(n.id); } catch { toast("保存できませんでした"); }
@@ -706,6 +799,7 @@ Object.assign(app, {
   normalize, nearestMuseum, verify, merge, updateIdentify,
 });
 museumsTab.init();
+pickMuseum($("#inMuseum"));
 calendarTab.init();
 eventsTab.init();
 bulk.init();

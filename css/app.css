@@ -441,3 +441,26 @@ nav.tabs button{padding-left:0;padding-right:0;letter-spacing:0;white-space:nowr
 .dots i.on{background:var(--ink)}
 .ph-acts{justify-content:flex-end}
 .ph-count{position:absolute;right:6px;bottom:6px;font-size:11px;font-weight:600;padding:2px 6px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff}
+
+/* museum name suggestions */
+.field{position:relative}
+.mpick{position:absolute;left:0;right:0;top:100%;z-index:60;margin-top:4px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.35);max-height:300px;overflow-y:auto;display:flex;flex-direction:column}
+.mpick button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 12px;font:inherit;color:var(--ink);cursor:pointer}
+.mpick button:last-child{border-bottom:0}
+.mpick button:hover,.mpick button:focus{background:var(--chip)}
+.mpick b{font-weight:600;font-size:14px}
+.mpick span{font-size:12px;color:var(--muted)}
+
+/* picking works to merge */
+.selbar{position:sticky;top:64px;z-index:15;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.selbar span{flex:1;font-size:14px;font-weight:600}
+.work{position:relative}
+.pick-mark{position:absolute;top:8px;left:8px;z-index:2;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.35);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.work.picked .pick-mark{background:var(--accent)}
+.work.picked .frame{outline:3px solid var(--accent);outline-offset:2px}
+.merge-opt{display:flex;gap:10px;align-items:center;cursor:pointer}
+.merge-opt > span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mthumb{width:52px;height:52px;flex:none;border-radius:2px;overflow:hidden;background:var(--chip)}
+.mthumb img{width:100%;height:100%;object-fit:cover}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--accent);text-decoration:underline;cursor:pointer}

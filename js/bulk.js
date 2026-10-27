@@ -9,6 +9,7 @@ import * as ai from "./ai.js";
 import * as sync from "./sync.js";
 import * as P from "./places.js";
 import * as Ph from "./photos.js";
+import * as MP from "./museumpick.js";
 import { $, esc, toast, openSheet, closeSheet, app, loadImg, toBlob, photoMeta, reverseGeocode, ymd } from "./ui.js";
 
 const PAIR_MS = 5 * 60 * 1000;
@@ -82,27 +83,28 @@ async function pick(files) {
   openSheet(`<div class="bar"><button class="btn ghost" id="bkClose">← 戻る</button></div>
     <h2>まとめて登録</h2>
     <p class="small muted" style="margin:0">${picked.length}枚の写真から作品を登録します${dup ? `（${dup}枚は登録済みなので飛ばします）` : ""}。作品だけの写真も、ラベル（解説）の写真も、どちらでも大丈夫です。作品のすぐ後に撮ったラベルの写真は、その作品にまとめます。撮影日と場所は写真から読み取ります。</p>
-    <div class="field"><label for="bkMuseum">美術館（写真に位置情報がないときに使います・任意）</label><input id="bkMuseum" list="museumList" placeholder="例：国立西洋美術館"></div>
+    <div class="field"><label for="bkMuseum">美術館（写真に位置情報がないときに使います・任意）</label><input id="bkMuseum" placeholder="名前を入れると候補が出ます"></div>
     <div class="status small">${ai.isFree() ? "Gemini無料枠の回数制限のため、1枚ずつ順番に調べます。" : "Claudeで識別します（有料）。"}目安は${n}枚で<b>約${fmt((n + busy) * avgSec())}</b>${busy ? `（登録中の${busy}枚を含む）` : ""}。登録を始めたら、この画面を閉じてアプリを使っていて大丈夫です。</div>
     <div class="row"><button class="btn primary" id="bkStart" ${n && ai.settings.apiKey ? "" : "disabled"}>${n}枚の登録を始める</button></div>
     ${ai.settings.apiKey ? "" : `<div class="status err small">設定でAPIキーを入れてください。</div>`}
     <div class="bkgrid">${picked.map((p, i) => `<img id="bkp${i}" alt="" class="${p.dup ? "dup" : ""}">`).join("")}</div>`);
   picked.forEach((p, i) => { const img = $(`#bkp${i}`); if (img) img.src = URL.createObjectURL(p.f); });
   $("#bkClose").onclick = () => closeSheet();
+  MP.attach($("#bkMuseum"), { extraNames: () => [...new Set(app.works().map(w => w.museum).filter(Boolean))] });
   $("#bkStart").onclick = () => start();
 }
 
 // Put the chosen photos in the queue (resized copies, so they survive the app closing).
 async function start() {
   const btn = $("#bkStart"); btn.disabled = true;
-  const museum = $("#bkMuseum").value.trim();
+  const museum = $("#bkMuseum").value.trim(), museumMid = $("#bkMuseum").dataset.mid || "";
   const todo = picked.filter(x => !x.dup);
   const batch = Date.now();
   let i = 0, bad = 0;
   for (const p of todo) {
     btn.textContent = `写真を準備しています… ${++i}/${todo.length}`;
     const rec = { id: "q" + batch.toString(36) + "-" + i, batch, seq: i, name: p.f.name, fp: fingerprint(p.f), meta: p.meta,
-      time: p.time, lastModified: p.f.lastModified || 0, fallbackMuseum: museum, state: "wait", stage: "wait", addedAt: Date.now() };
+      time: p.time, lastModified: p.f.lastModified || 0, fallbackMuseum: museum, fallbackMid: museumMid, state: "wait", stage: "wait", addedAt: Date.now() };
     try {
       const img = await loadImg(p.f);
       rec.img = await toBlob(img, 1600, .86);
@@ -165,7 +167,7 @@ async function processOne(it) {
       if (near) { museum = near.name; museumId = near.id; }
       else place = await reverseGeocode(it.meta.lat, it.meta.lng).catch(() => "");
     }
-    museum ||= it.fallbackMuseum || "";
+    if (!museum && it.fallbackMuseum) { museum = it.fallbackMuseum; museumId = it.fallbackMid || ""; }
     it.place = museum || place;
     await setStage(it, "ai");
     lastCall = Date.now();
