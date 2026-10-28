@@ -311,6 +311,34 @@ function cardHtml(w) {
     <div class="label"><div class="artist">${esc(w.artist || "作家不明")}</div><div class="title">${esc(w.title || "無題")}${w.year ? `、${esc(w.year)}` : ""}</div><div class="meta">${esc(w.museum || "")}</div></div>
   </button>`;
 }
+// One row of the list view: small picture + title, artist, museum.
+function rowHtml(w) {
+  return `<button class="work lrow${selecting && selected.has(w.id) ? " picked" : ""}" data-id="${esc(w.id)}" ${selecting ? `aria-pressed="${selected.has(w.id)}"` : ""}>
+    <div class="frame">${thumbOf(w) ? `<img src="${thumbOf(w)}" alt="" loading="lazy">` : ""}${selecting && !w.sample ? `<span class="pick-mark">${selected.has(w.id) ? "✓" : ""}</span>` : ""}</div>
+    <div class="lr-text"><div class="lr-title">${esc(w.title || "無題")}${w.fav ? ` <span class="lr-fav">♥</span>` : ""}</div><div class="lr-artist">${esc(w.artist || "作家不明")}${w.year ? `・${esc(w.year)}` : ""}</div>
+    ${w.museum ? `<div class="lr-museum">📍 ${esc(w.museum)}</div>` : ""}</div>${!w.sample && Ph.count(w) > 1 ? `<span class="lr-n">▣ ${Ph.count(w)}</span>` : w.sample ? `<span class="lr-n">サンプル</span>` : ""}
+  </button>`;
+}
+// Museum view: one section per museum (latest visit first), works as a strip.
+function museumGroupsHtml(shown) {
+  const groups = new Map();
+  for (const w of shown) {
+    const id = P.museumIdFor(w) || "";
+    const key = id || (w.museum ? "n:" + w.museum : "");
+    if (!groups.has(key)) groups.set(key, { id, name: id ? (P.museumById(id)?.name || w.museum) : w.museum || "", works: [], last: "" });
+    const g = groups.get(key); g.works.push(w);
+    const d = (w.visited || "").slice(0, 10) || (w.createdAt ? new Date(w.createdAt).toISOString().slice(0, 10) : "");
+    if (d > g.last) g.last = d;
+  }
+  const arr = [...groups.values()].sort((a, b) => (!a.name) - (!b.name) || b.last.localeCompare(a.last));
+  return arr.map(g => {
+    const m = g.id ? P.museumById(g.id) : null;
+    const where = m ? (P.isJapan(m) ? m.pref || "" : [m.country, m.city].filter(Boolean).join(" ")) : "";
+    return `<section class="mgroup"><div class="mg-head">${g.id ? `<button class="mg-name" data-mopen="${esc(g.id)}">${esc(g.name)}</button>` : `<span class="mg-name">${esc(g.name || "美術館がわからない作品")}</span>`}
+      <span class="small muted">${[where, g.works.length + "点", g.last ? "最後に " + g.last.replace(/-/g, ".") : ""].filter(Boolean).join(" ・ ")}</span></div>
+      <div class="mg-strip">${g.works.map(cardHtml).join("")}</div></section>`;
+  }).join("");
+}
 const yearNum = y => { const m = String(y || "").match(/\d{3,4}/); return m ? +m[0] : 99999; };
 function render() {
   const list = visible();
@@ -329,7 +357,14 @@ function render() {
     : sort === "artist" ? (a, b) => (a.artist || "").localeCompare(b.artist || "", "ja")
     : sort === "year" ? (a, b) => yearNum(a.year) - yearNum(b.year)
     : (a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  $("#wall").innerHTML = shown.length ? shown.map(cardHtml).join("") :
+  const wall = $("#wall");
+  wall.classList.toggle("as-list", view === "list"); wall.classList.toggle("as-groups", view === "museum");
+  wall.hidden = view === "map"; $("#colMapWrap").hidden = view !== "map";
+  $("#colsSeg").hidden = view !== "grid";
+  document.querySelectorAll("#viewSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === view)));
+  if (view === "map") renderColMap(shown);
+  wall.innerHTML = !shown.length ? "" : view === "list" ? shown.map(rowHtml).join("") : view === "museum" ? museumGroupsHtml(shown) : shown.map(cardHtml).join("");
+  if (!shown.length) wall.innerHTML =
     `<div class="empty" style="grid-column:1/-1"><strong>見つかりませんでした</strong><span class="muted small">${group === "fav" ? "作品の詳細画面で ♡ を押すと、お気に入りに入ります。" : "別の言葉で検索するか、絞り込みを「すべて」に戻してください。"}</span></div>`;
   $("#museumList").innerHTML = [...new Set(works.map(w => w.museum).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join("");
   if (!$("#v-museums").hidden) museumsTab.render();
@@ -342,6 +377,7 @@ $("#sort").onchange = render;
 $("#groupChips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; group = b.dataset.g; filterVal = ""; render(); };
 $("#chips").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; filterVal = b.dataset.v; render(); };
 $("#wall").onclick = e => {
+  const mo = e.target.closest("[data-mopen]"); if (mo && !selecting) { museumsTab.openMuseum(mo.dataset.mopen); return; }
   const b = e.target.closest(".work"); if (!b) return;
   if (!selecting) { openDetail(b.dataset.id); return; }
   const id = b.dataset.id; if (!works.some(w => w.id === id)) return;
@@ -371,6 +407,81 @@ $("#sheetIn").addEventListener("error", e => {
   img.closest(".slide")?.classList.add("broken");
   repairWork(box.dataset.wid);
 }, true);
+
+/* ================= collection views: grid / list / by museum / map ================= */
+const VIEW_KEY = "artmuse.view";
+let view = "grid"; try { view = localStorage.getItem(VIEW_KEY) || "grid"; } catch {}
+if (!["grid", "list", "museum", "map"].includes(view)) view = "grid";
+$("#viewSeg").onclick = e => {
+  const b = e.target.closest("[data-v]"); if (!b || b.dataset.v === view) return;
+  view = b.dataset.v; try { localStorage.setItem(VIEW_KEY, view); } catch {}
+  render();
+};
+
+// Map of your photos: a framed picture on each museum where you took one. Works whose museum
+// is unknown are left out. Nearby museums are bundled into one picture with a count while zoomed out.
+let colMap = null, colLayer = null, colPts = [];
+function renderColMap(shown) {
+  if (!window.L) { $("#colMapNote").textContent = "地図を読み込めませんでした。インターネット接続を確認してください。"; return; }
+  if (!colMap) {
+    colMap = L.map("colMap", { zoomControl: true, worldCopyJump: true }).setView([36.5, 137.5], 5);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(colMap);
+    colLayer = L.layerGroup().addTo(colMap);
+    colMap.on("zoomend", drawColMarkers);
+    colMap.getContainer().addEventListener("click", e => {
+      const b = e.target.closest("[data-id]"); if (b) { openDetail(b.dataset.id); return; }
+      const mo = e.target.closest("[data-mopen]"); if (mo) museumsTab.openMuseum(mo.dataset.mopen);
+    });
+  }
+  const byM = new Map(); let unknown = 0;
+  for (const w of shown) {
+    const id = w.sample ? null : P.museumIdFor(w);
+    const m = id && P.museumById(id);
+    if (!m || !Number.isFinite(m.lat) || !Number.isFinite(m.lng)) { if (!w.sample) unknown++; continue; }
+    if (!byM.has(id)) byM.set(id, { m, works: [] });
+    byM.get(id).works.push(w);
+  }
+  colPts = [...byM.values()];
+  for (const p of colPts) p.works.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const fresh = !$("#colMapWrap").dataset.shown; $("#colMapWrap").dataset.shown = "1";
+  setTimeout(() => {
+    colMap.invalidateSize();
+    if (fresh || colPts.length) {
+      const ll = colPts.map(p => [p.m.lat, p.m.lng]);
+      if (ll.length === 1) colMap.setView(ll[0], 13); else if (ll.length > 1) colMap.fitBounds(ll, { padding: [40, 40], maxZoom: 13 });
+    }
+    drawColMarkers();
+  }, 0);
+  const total = colPts.reduce((n, p) => n + p.works.length, 0);
+  $("#colMapNote").textContent = colPts.length ? `${colPts.length}館・${total}点${unknown ? ` ・ 美術館がわからない${unknown}点は地図に出ません` : ""}` : "美術館がわかる作品がまだありません。作品の詳細で美術館を選ぶと地図に出ます。";
+}
+function drawColMarkers() {
+  if (!colMap) return;
+  colLayer.clearLayers();
+  // bundle museums closer than ~56px on screen
+  const clusters = [];
+  for (const p of colPts) {
+    const xy = colMap.latLngToLayerPoint([p.m.lat, p.m.lng]);
+    const c = clusters.find(c => c.xy.distanceTo(xy) < 56);
+    if (c) c.items.push(p); else clusters.push({ xy, items: [p] });
+  }
+  for (const c of clusters) {
+    const works = c.items.flatMap(p => p.works);
+    const top = works.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+    const n = works.length;
+    const lat = c.items.reduce((s, p) => s + p.m.lat, 0) / c.items.length, lng = c.items.reduce((s, p) => s + p.m.lng, 0) / c.items.length;
+    const icon = L.divIcon({ className: "phpin-wrap", iconSize: [52, 52], iconAnchor: [26, 26],
+      html: `<div class="phpin${n > 1 ? " stack" : ""}">${thumbOf(top) ? `<img src="${thumbOf(top)}" alt="">` : ""}${n > 1 ? `<b>${n}</b>` : ""}</div>` });
+    const mk = L.marker([lat, lng], { icon, keyboard: true, title: c.items.map(p => p.m.name).join("、") }).addTo(colLayer);
+    if (c.items.length > 1) {
+      mk.on("click", () => colMap.fitBounds(c.items.map(p => [p.m.lat, p.m.lng]), { padding: [60, 60], maxZoom: Math.max(colMap.getZoom() + 2, 12) }));
+    } else {
+      const p = c.items[0];
+      mk.bindPopup(() => `<button class="pop-title linkish" data-mopen="${esc(p.m.id)}">${esc(p.m.name)}</button><div class="small muted">${p.works.length}点</div>
+        <div class="pop-strip">${p.works.slice(0, 24).map(w => `<button data-id="${esc(w.id)}" aria-label="${esc(w.title)}"><img src="${thumbOf(w)}" alt=""></button>`).join("")}</div>`, { maxWidth: 260 });
+    }
+  }
+}
 
 /* ================= tidy: merge works you pick, unify museum names ================= */
 let selecting = false;
